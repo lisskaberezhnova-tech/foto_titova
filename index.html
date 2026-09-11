@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>AR Photo Zone: Рост из мха</title>
+
+    <!-- Подключаем A‑Frame -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- Подключаем MindAR для распознавания меток -->
+    <script src="https://cdn.jsdelivr.net/npm/mindar-image@1.2.0/mindar-image.min.js"></script>
+
+    <style>
+      body { margin: 0; overflow: hidden; }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <a-scene
+      mindar-image="src: targets.mind; filterMode: best; enableSmooth: true; smoothCount: 10; smoothFactor: 0.5;"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false">
+
+      <!-- Спрайт 1: Композиция (каскадный рост из «Мох с геометрией») -->
+      <a-image
+        id="bouquet-photo"
+        src="bouquet-photo.png"
+        rotation="0 0 0"
+        position="0 -0.6 -0.1"
+        scale="0.7 0.7 1">
+        <a-animation attribute="position" from="0 -0.6 -0.1" to="0 0 -0.1" dur="1000" easing="ease-out" start-event="markerfound"></a-animation>
+        <a-animation attribute="scale" from="0.7 0.7 1" to="1 1 1" dur="900" easing="ease-in" start-event="markerfound"></a-animation>
+        <a-animation attribute="opacity" from="0" to="1" dur="700" start-event="markerfound"></a-animation>
+      </a-image>
+
+    </a-scene>
+  </body>
+</html>
