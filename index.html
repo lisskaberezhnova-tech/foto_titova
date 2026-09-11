@@ -5,11 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>AR Photo Zone</title>
 
-    <!-- 1. Core-библиотека MindAR (загружается первой!) -->
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
-    <!-- 2. A-Frame (берём с jsDelivr, не с aframe.io!) -->
-    <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
-    <!-- 3. A-Frame расширение MindAR (загружается последним!) -->
+    <!-- A-Frame: правильное имя файла на CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
+    <!-- MindAR: этот CDN уже работает у вас -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
