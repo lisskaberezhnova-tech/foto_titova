@@ -284,7 +284,7 @@
       })();
 
       // =====================================================
-      // АРКА — плавная аккуратная дуга, пониже, не плотно
+      // ПРЯМОУГОЛЬНАЯ АРКА — по центру, аккуратная
       // =====================================================
 
       function shuffle(arr) {
@@ -295,51 +295,128 @@
         return arr;
       }
 
-      // Параметры арки — пониже, пошире, аккуратная
-      var archLeftX = -1.35;
-      var archRightX = 1.15;
-      var archBottomY = -0.15;
-      var archPeakY = 1.3;      // ниже, чем было (1.95)
-      var archPeakX = -0.08;     // чуть левее — лёгкая асимметрия
+      // Размеры арки — симметричные, по центру
+      var archLeftX = -1.05;
+      var archRightX = 1.05;
+      var archBottomY = -0.05;
+      var archTopY = 1.15;
 
-      // Плавная параболическая дуга
-      function archY(x) {
-        // Нормализуем X от -1 (левый край) до 1 (правый край)
-        var halfWidth = Math.max(Math.abs(archLeftX - archPeakX), Math.abs(archRightX - archPeakX));
-        var normX = (x - archPeakX) / halfWidth;
-        // Парабола: y = 1 - x^2 (1 в центре, 0 по краям)
-        var h = 1 - normX * normX;
-        // Лёгкая асимметрия: левая сторона чуть выше
-        if (x < archPeakX) {
-          h = h * 1.08;
-        }
-        return archBottomY + (archPeakY - archBottomY) * h;
+      // Лёгкая асимметрия — правая сторона чуть ниже
+      var archTopYRight = 1.08;
+
+      var positions = [];
+
+      // --- Левая вертикаль (снизу вверх, без верхнего угла) ---
+      var leftCount = 8;
+      for (var i = 0; i < leftCount; i++) {
+        var t = i / leftCount;
+        var y = archBottomY + (archTopY - archBottomY) * t;
+        positions.push({
+          x: archLeftX + (Math.random() - 0.5) * 0.1,
+          y: y + (Math.random() - 0.5) * 0.08
+        });
       }
 
-      // Генерируем позиции вдоль арки — меньше пионов, больше расстояние
-      var numPositions = 36;
-      var archPositions = [];
-      for (var i = 0; i < numPositions; i++) {
-        var t = i / (numPositions - 1);
+      // --- Верхняя горизонталь (слева направо, включая оба угла) ---
+      var topCount = 14;
+      for (var i = 0; i < topCount; i++) {
+        var t = i / (topCount - 1);
         var x = archLeftX + (archRightX - archLeftX) * t;
-        var y = archY(x);
-        // Небольшое случайное смещение — естественно, но не хаотично
-        x += (Math.random() - 0.5) * 0.18;
-        y += (Math.random() - 0.5) * 0.15;
-        archPositions.push({ x: x, y: y });
+        // Лёгкий наклон: слева archTopY, справа archTopYRight
+        var y = archTopY + (archTopYRight - archTopY) * t;
+        positions.push({
+          x: x + (Math.random() - 0.5) * 0.06,
+          y: y + (Math.random() - 0.5) * 0.1
+        });
       }
-      shuffle(archPositions);
 
-      // =====================================================
-      // КОНФИГУРАЦИЯ ПИОНОВ — типы перемешаны, меньше плотность
-      // =====================================================
+      // --- Правая вертикаль (сверху вниз, без верхнего угла) ---
+      var rightCount = 8;
+      for (var i = 1; i <= rightCount; i++) {
+        var t = i / rightCount;
+        var y = archTopYRight - (archTopYRight - archBottomY) * t;
+        positions.push({
+          x: archRightX + (Math.random() - 0.5) * 0.1,
+          y: y + (Math.random() - 0.5) * 0.08
+        });
+      }
 
-      var peonyTypes = [
-        { src: 'peony.png',       sMin: 0.45, sMax: 0.9,  count: 10, zMin: 0.01, zMax: 0.04 },
-        { src: 'peony_half.png',  sMin: 0.28, sMax: 0.42, count: 10, zMin: 0.0,  zMax: 0.02 },
-        { src: 'peony_open.png',  sMin: 0.3,  sMax: 0.48, count: 9,  zMin: 0.0,  zMax: 0.03 },
-        { src: 'peony_bud.png',   sMin: 0.14, sMax: 0.22, count: 7,  zMin: 0.02, zMax: 0.05 }
+      // --- Низ: бутоны вниз по обеим сторонам ---
+      var bottomExtras = [
+        { x: archLeftX - 0.02, y: archBottomY - 0.12 },
+        { x: archLeftX + 0.08, y: archBottomY - 0.22 },
+        { x: archLeftX - 0.06, y: archBottomY - 0.3 },
+        { x: archRightX + 0.02, y: archBottomY - 0.12 },
+        { x: archRightX - 0.08, y: archBottomY - 0.22 },
+        { x: archRightX + 0.06, y: archBottomY - 0.3 }
       ];
+      bottomExtras.forEach(function(p) {
+        positions.push({ x: p.x, y: p.y });
+      });
+
+      // Перемешиваем все позиции
+      shuffle(positions);
+
+      // =====================================================
+      // КОНФИГУРАЦИЯ ПИОНОВ — естественное соотношение
+      // На 1 полностью открытый: 1-2 бутона
+      // На 1 полураскрытый: 2-3 бутона
+      // =====================================================
+
+      // 9 полностью открытых → ~14 бутонов
+      // 7 полураскрытых → ~18 бутонов
+      // Итого ~32 бутона... сократим до разумного
+      // Возьмём: 9 открытых, 7 полураскрытых, 5 раскрывающихся, 16 бутонов
+
+      var peonySpecs = [];
+      var idx = 0;
+
+      // 9 полностью открытых (крупные)
+      for (var i = 0; i < 9; i++) {
+        peonySpecs.push({
+          src: 'peony.png',
+          scale: 0.5 + Math.random() * 0.35,  // 0.5–0.85
+          rot: (Math.random() - 0.5) * 20,
+          z: 0.01 + Math.random() * 0.03
+        });
+      }
+
+      // 7 полураскрытых (средние)
+      for (var i = 0; i < 7; i++) {
+        peonySpecs.push({
+          src: 'peony_half.png',
+          scale: 0.32 + Math.random() * 0.13,  // 0.32–0.45
+          rot: (Math.random() - 0.5) * 24,
+          z: 0.0 + Math.random() * 0.02
+        });
+      }
+
+      // 5 раскрывающихся (чуть крупнее полураскрытых)
+      for (var i = 0; i < 5; i++) {
+        peonySpecs.push({
+          src: 'peony_open.png',
+          scale: 0.35 + Math.random() * 0.12,  // 0.35–0.47
+          rot: (Math.random() - 0.5) * 22,
+          z: 0.0 + Math.random() * 0.025
+        });
+      }
+
+      // 16 бутонов (мелкие) — 1-2 на открытый, 2-3 на полураскрытый
+      for (var i = 0; i < 16; i++) {
+        peonySpecs.push({
+          src: 'peony_bud.png',
+          scale: 0.14 + Math.random() * 0.08,  // 0.14–0.22
+          rot: (Math.random() - 0.5) * 30,
+          z: 0.02 + Math.random() * 0.03
+        });
+      }
+
+      // Перемешиваем типы — нет последовательности
+      shuffle(peonySpecs);
+
+      // =====================================================
+      // СОЗДАНИЕ ПИОНОВ
+      // =====================================================
 
       var container = document.getElementById('container');
       var target = document.getElementById('target');
@@ -349,13 +426,12 @@
       var allPeonyPositions = [];
       var origPos = {};
 
-      var posIdx = 0;
-
       function createPeony(id, src, x, y, rot, baseScale, zOffset, growDur, fadeDur) {
         var el = document.createElement('a-image');
         el.setAttribute('id', id);
         el.setAttribute('src', src);
-        el.setAttribute('material', 'transparent: true; alphaTest: 0.05; side: double');
+        // alphaTest 0.01 — минимальный, не режет края
+        el.setAttribute('material', 'transparent: true; alphaTest: 0.01; side: double');
         var posStr = x + ' ' + y + ' ' + zOffset;
         el.setAttribute('position', posStr);
         el.setAttribute('rotation', '0 ' + rot + ' 0');
@@ -371,20 +447,17 @@
         return el;
       }
 
-      peonyTypes.forEach(function(type) {
-        for (var i = 0; i < type.count; i++) {
-          if (posIdx >= archPositions.length) posIdx = 0;
-          var pos = archPositions[posIdx++];
-          var scale = type.sMin + Math.random() * (type.sMax - type.sMin);
-          var rot = (Math.random() - 0.5) * 24;
-          var z = type.zMin + Math.random() * (type.zMax - type.zMin);
-          var growDur = 500 + Math.floor(Math.random() * 300);
-          var fadeDur = 200 + Math.floor(Math.random() * 150);
-          var id = 'peony_' + allPeonies.length;
-          createPeony(id, type.src, pos.x, pos.y, rot, scale, z, growDur, fadeDur);
-          allPeonyPositions.push({ x: pos.x, y: pos.y, z: z });
-        }
-      });
+      // Назначаем позиции пионам — если позиций больше, чем пионов, берём первые N
+      // если пионов больше, чем позиций — циклически
+      for (var i = 0; i < peonySpecs.length; i++) {
+        var spec = peonySpecs[i];
+        var pos = positions[i % positions.length];
+        var growDur = 500 + Math.floor(Math.random() * 300);
+        var fadeDur = 200 + Math.floor(Math.random() * 150);
+        var id = 'peony_' + i;
+        createPeony(id, spec.src, pos.x, pos.y, spec.rot, spec.scale, spec.z, growDur, fadeDur);
+        allPeonyPositions.push({ x: pos.x, y: pos.y, z: spec.z });
+      }
 
       // =====================================================
       // СВЕРКАНИЕ
@@ -393,12 +466,12 @@
       var sparkleElements = [];
       var sparkleActive = false;
 
-      // ~28 сверкающих точек
-      for (var i = 0; i < 28; i++) {
+      // 26 мелких сверкающих точек
+      for (var i = 0; i < 26; i++) {
         var pIdx = Math.floor(Math.random() * allPeonyPositions.length);
         var pp = allPeonyPositions[pIdx];
-        var sx = pp.x + (Math.random() - 0.5) * 0.15;
-        var sy = pp.y + (Math.random() - 0.5) * 0.15;
+        var sx = pp.x + (Math.random() - 0.5) * 0.12;
+        var sy = pp.y + (Math.random() - 0.5) * 0.12;
         var sz = (pp.z || 0) + 0.03;
 
         var el = document.createElement('a-image');
@@ -407,7 +480,7 @@
         el.setAttribute('material', 'transparent: true; alphaTest: 0; opacity: 0; side: double');
         el.setAttribute('position', sx + ' ' + sy + ' ' + sz);
 
-        var size = 0.04 + Math.random() * 0.06;
+        var size = 0.04 + Math.random() * 0.05;
         el.setAttribute('scale', size + ' ' + size + ' 1');
         container.appendChild(el);
 
@@ -425,8 +498,8 @@
       for (var i = 0; i < 6; i++) {
         var pIdx = Math.floor(Math.random() * allPeonyPositions.length);
         var pp = allPeonyPositions[pIdx];
-        var sx = pp.x + (Math.random() - 0.5) * 0.12;
-        var sy = pp.y + (Math.random() - 0.5) * 0.12;
+        var sx = pp.x + (Math.random() - 0.5) * 0.1;
+        var sy = pp.y + (Math.random() - 0.5) * 0.1;
         var sz = (pp.z || 0) + 0.04;
 
         var el = document.createElement('a-image');
@@ -435,7 +508,7 @@
         el.setAttribute('material', 'transparent: true; alphaTest: 0; opacity: 0; side: double');
         el.setAttribute('position', sx + ' ' + sy + ' ' + sz);
 
-        var size = 0.08 + Math.random() * 0.05;
+        var size = 0.08 + Math.random() * 0.04;
         el.setAttribute('scale', size + ' ' + size + ' 1');
         container.appendChild(el);
 
