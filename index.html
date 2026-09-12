@@ -145,10 +145,6 @@
     </a-scene>
 
     <script>
-      // =====================================================
-      // БАЗОВЫЕ НАСТРОЙКИ
-      // =====================================================
-
       var params = new URLSearchParams(window.location.search);
       var currentCam = params.get('camera') || 'back';
 
@@ -182,10 +178,7 @@
         applyMirror();
       });
 
-      // =====================================================
-      // ФОТО
-      // =====================================================
-
+      // === Фото ===
       var photoBtn = document.getElementById('photo-btn');
       var flashEl = document.getElementById('flash');
 
@@ -250,7 +243,7 @@
       });
 
       // =====================================================
-      // ТЕКСТУРА СВЕРКАНИЯ — canvas-generated PNG
+      // ТЕКСТУРА СВЕРКАНИЯ
       // =====================================================
 
       var sparkleTexture = (function() {
@@ -258,7 +251,6 @@
         c.width = 128; c.height = 128;
         var ctx = c.getContext('2d');
 
-        // Мягкое свечение
         var g1 = ctx.createRadialGradient(64, 64, 0, 64, 64, 55);
         g1.addColorStop(0, 'rgba(255,255,255,0.95)');
         g1.addColorStop(0.15, 'rgba(255,250,230,0.6)');
@@ -267,7 +259,6 @@
         ctx.fillStyle = g1;
         ctx.fillRect(0, 0, 128, 128);
 
-        // Четырёхлучевая звезда
         ctx.save();
         ctx.translate(64, 64);
         ctx.fillStyle = 'rgba(255,255,255,0.92)';
@@ -280,7 +271,6 @@
         ctx.fill();
         ctx.restore();
 
-        // Яркий центр
         var g2 = ctx.createRadialGradient(64, 64, 0, 64, 64, 18);
         g2.addColorStop(0, 'rgba(255,255,255,1)');
         g2.addColorStop(0.5, 'rgba(255,255,240,0.5)');
@@ -294,7 +284,7 @@
       })();
 
       // =====================================================
-      // АРКА — генерация позиций по асимметричной дуге
+      // АРКА — плавная аккуратная дуга, пониже, не плотно
       // =====================================================
 
       function shuffle(arr) {
@@ -305,47 +295,50 @@
         return arr;
       }
 
-      // Параметры арки
-      var archLeftX = -1.45;
-      var archRightX = 1.2;
-      var archBottomY = -0.3;
-      var archPeakY = 1.95;
-      var archPeakX = -0.12; // чуть левее центра — асимметрия
+      // Параметры арки — пониже, пошире, аккуратная
+      var archLeftX = -1.35;
+      var archRightX = 1.15;
+      var archBottomY = -0.15;
+      var archPeakY = 1.3;      // ниже, чем было (1.95)
+      var archPeakX = -0.08;     // чуть левее — лёгкая асимметрия
 
+      // Плавная параболическая дуга
       function archY(x) {
-        var normX = (x - archPeakX) / Math.max(Math.abs(archLeftX - archPeakX), Math.abs(archRightX - archPeakX));
+        // Нормализуем X от -1 (левый край) до 1 (правый край)
+        var halfWidth = Math.max(Math.abs(archLeftX - archPeakX), Math.abs(archRightX - archPeakX));
+        var normX = (x - archPeakX) / halfWidth;
+        // Парабола: y = 1 - x^2 (1 в центре, 0 по краям)
         var h = 1 - normX * normX;
-        var y = archBottomY + (archPeakY - archBottomY) * h;
-        // Левая ветвь — дополнительная высота
+        // Лёгкая асимметрия: левая сторона чуть выше
         if (x < archPeakX) {
-          y += Math.abs(x - archPeakX) * 0.15;
+          h = h * 1.08;
         }
-        return y;
+        return archBottomY + (archPeakY - archBottomY) * h;
       }
 
-      // Генерируем позиции вдоль арки
-      var numPositions = 50;
+      // Генерируем позиции вдоль арки — меньше пионов, больше расстояние
+      var numPositions = 36;
       var archPositions = [];
       for (var i = 0; i < numPositions; i++) {
         var t = i / (numPositions - 1);
         var x = archLeftX + (archRightX - archLeftX) * t;
         var y = archY(x);
-        // Случайное смещение для естественности
-        x += (Math.random() - 0.5) * 0.3;
-        y += (Math.random() - 0.5) * 0.25;
+        // Небольшое случайное смещение — естественно, но не хаотично
+        x += (Math.random() - 0.5) * 0.18;
+        y += (Math.random() - 0.5) * 0.15;
         archPositions.push({ x: x, y: y });
       }
       shuffle(archPositions);
 
       // =====================================================
-      // КОНФИГУРАЦИЯ ПИОНОВ — типы перемешаны
+      // КОНФИГУРАЦИЯ ПИОНОВ — типы перемешаны, меньше плотность
       // =====================================================
 
       var peonyTypes = [
-        { src: 'peony.png',       sMin: 0.5,  sMax: 1.05, count: 12, zMin: 0.01, zMax: 0.04 },
-        { src: 'peony_half.png',  sMin: 0.3,  sMax: 0.5,  count: 14, zMin: 0.0,  zMax: 0.02 },
-        { src: 'peony_open.png',  sMin: 0.35, sMax: 0.55, count: 13, zMin: 0.0,  zMax: 0.03 },
-        { src: 'peony_bud.png',   sMin: 0.15, sMax: 0.26, count: 11, zMin: 0.02, zMax: 0.05 }
+        { src: 'peony.png',       sMin: 0.45, sMax: 0.9,  count: 10, zMin: 0.01, zMax: 0.04 },
+        { src: 'peony_half.png',  sMin: 0.28, sMax: 0.42, count: 10, zMin: 0.0,  zMax: 0.02 },
+        { src: 'peony_open.png',  sMin: 0.3,  sMax: 0.48, count: 9,  zMin: 0.0,  zMax: 0.03 },
+        { src: 'peony_bud.png',   sMin: 0.14, sMax: 0.22, count: 7,  zMin: 0.02, zMax: 0.05 }
       ];
 
       var container = document.getElementById('container');
@@ -362,7 +355,6 @@
         var el = document.createElement('a-image');
         el.setAttribute('id', id);
         el.setAttribute('src', src);
-        // alphaTest 0.05 — мягкие края, не режет полупрозрачность
         el.setAttribute('material', 'transparent: true; alphaTest: 0.05; side: double');
         var posStr = x + ' ' + y + ' ' + zOffset;
         el.setAttribute('position', posStr);
@@ -379,7 +371,6 @@
         return el;
       }
 
-      // Создаём пионы — типы перемешаны, позиции случайные
       peonyTypes.forEach(function(type) {
         for (var i = 0; i < type.count; i++) {
           if (posIdx >= archPositions.length) posIdx = 0;
@@ -396,18 +387,18 @@
       });
 
       // =====================================================
-      // СВЕРКАНИЕ — JS-анимация через синусоиду
+      // СВЕРКАНИЕ
       // =====================================================
 
       var sparkleElements = [];
       var sparkleActive = false;
 
-      // Создаём ~35 сверкающих точек, привязанных к пионам
-      for (var i = 0; i < 35; i++) {
+      // ~28 сверкающих точек
+      for (var i = 0; i < 28; i++) {
         var pIdx = Math.floor(Math.random() * allPeonyPositions.length);
         var pp = allPeonyPositions[pIdx];
-        var sx = pp.x + (Math.random() - 0.5) * 0.18;
-        var sy = pp.y + (Math.random() - 0.5) * 0.18;
+        var sx = pp.x + (Math.random() - 0.5) * 0.15;
+        var sy = pp.y + (Math.random() - 0.5) * 0.15;
         var sz = (pp.z || 0) + 0.03;
 
         var el = document.createElement('a-image');
@@ -416,7 +407,7 @@
         el.setAttribute('material', 'transparent: true; alphaTest: 0; opacity: 0; side: double');
         el.setAttribute('position', sx + ' ' + sy + ' ' + sz);
 
-        var size = 0.04 + Math.random() * 0.07;
+        var size = 0.04 + Math.random() * 0.06;
         el.setAttribute('scale', size + ' ' + size + ' 1');
         container.appendChild(el);
 
@@ -426,17 +417,16 @@
           phaseOffset: Math.random() * Math.PI * 2,
           speed: 0.8 + Math.random() * 1.8,
           maxOpacity: 0.5 + Math.random() * 0.4,
-          currentOpacity: 0,
-          currentScale: size
+          currentOpacity: 0
         });
       }
 
-      // Ещё несколько более крупных сверкающих точек
-      for (var i = 0; i < 8; i++) {
+      // 6 крупных сверкающих точек
+      for (var i = 0; i < 6; i++) {
         var pIdx = Math.floor(Math.random() * allPeonyPositions.length);
         var pp = allPeonyPositions[pIdx];
-        var sx = pp.x + (Math.random() - 0.5) * 0.15;
-        var sy = pp.y + (Math.random() - 0.5) * 0.15;
+        var sx = pp.x + (Math.random() - 0.5) * 0.12;
+        var sy = pp.y + (Math.random() - 0.5) * 0.12;
         var sz = (pp.z || 0) + 0.04;
 
         var el = document.createElement('a-image');
@@ -445,7 +435,7 @@
         el.setAttribute('material', 'transparent: true; alphaTest: 0; opacity: 0; side: double');
         el.setAttribute('position', sx + ' ' + sy + ' ' + sz);
 
-        var size = 0.09 + Math.random() * 0.05;
+        var size = 0.08 + Math.random() * 0.05;
         el.setAttribute('scale', size + ' ' + size + ' 1');
         container.appendChild(el);
 
@@ -455,12 +445,10 @@
           phaseOffset: Math.random() * Math.PI * 2,
           speed: 0.5 + Math.random() * 1.0,
           maxOpacity: 0.4 + Math.random() * 0.35,
-          currentOpacity: 0,
-          currentScale: size
+          currentOpacity: 0
         });
       }
 
-      // Анимация сверкания — синусоида с рандомной фазой и скоростью
       function sparkleTick(time) {
         var t = time * 0.001;
 
@@ -471,9 +459,9 @@
 
             if (v > 0.1) {
               s.currentOpacity = v * s.maxOpacity;
-              s.currentScale = s.size * (0.4 + 0.6 * v);
+              var sc = s.size * (0.4 + 0.6 * v);
               s.el.setAttribute('opacity', s.currentOpacity.toFixed(3));
-              s.el.setAttribute('scale', s.currentScale.toFixed(4) + ' ' + s.currentScale.toFixed(4) + ' 1');
+              s.el.setAttribute('scale', sc.toFixed(4) + ' ' + sc.toFixed(4) + ' 1');
             } else {
               if (s.currentOpacity > 0.01) {
                 s.currentOpacity = 0;
@@ -511,7 +499,6 @@
           var delay = Math.floor(i * step + Math.random() * (step * 0.5));
           setTimeout(function() { el.emit('bloom'); }, delay);
         });
-        // Запускаем сверкание после появления пионов
         setTimeout(function() { sparkleActive = true; }, 1100);
       }
 
