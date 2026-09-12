@@ -149,14 +149,12 @@
       var params = new URLSearchParams(window.location.search);
       var currentCam = params.get('camera') || 'back';
 
-      // === Кнопка разворота камеры ===
       var switchBtn = document.getElementById('switch-cam');
       switchBtn.addEventListener('click', function() {
         var newCam = currentCam === 'front' ? 'back' : 'front';
         window.location.href = window.location.pathname + '?camera=' + newCam;
       });
 
-      // === Кнопка отражения ===
       var mirrorBtn = document.getElementById('mirror-cam');
       var isMirror = false;
       if (currentCam === 'front') {
@@ -187,21 +185,24 @@
       });
 
       // =====================================================
-      // OCCLUSION — сегментация людей, бинаризованная маска
+      // OCCLUSION — улучшенный пайплайн маски
       // =====================================================
 
       var selfieSegmentation = null;
       var overlayCtx = null;
-      var personCanvas = null;   // видео, обрезанное бинарной маской
+      var personCanvas = null;
       var personCtx = null;
-      var maskCanvas = null;     // бинарная маска (0 или 255) — для фото
+      var maskCanvas = null;
       var maskCtx = null;
-      var tempCanvas = null;     // временный канвас для отрисовки маски
-      var tempCtx = null;
+      var workCanvas = null;
+      var workCtx = null;
+      var prevMaskCanvas = null;
+      var prevMaskCtx = null;
 
-      var occlusionActive = false;   // работает только когда метка найдена
+      var occlusionActive = false;
       var processingFrame = false;
       var frameCount = 0;
+      var lastVideoDims = { w: 0, h: 0 };
 
       function initOcclusion() {
         if (typeof SelfieSegmentation === 'undefined') {
@@ -209,7 +210,7 @@
           return;
         }
 
-        // overlay — отображается поверх AR
+        // overlay — видимый DOM-canvas поверх AR
         overlayCanvas = document.createElement('canvas');
         overlayCanvas.id = 'occlusion-overlay';
         overlayCanvas.style.position = 'fixed';
@@ -223,16 +224,20 @@
         document.body.appendChild(overlayCanvas);
         overlayCtx = overlayCanvas.getContext('2d');
 
+        // Рабочие canvas (внутренние, не в DOM)
         personCanvas = document.createElement('canvas');
         personCtx = personCanvas.getContext('2d');
 
         maskCanvas = document.createElement('canvas');
         maskCtx = maskCanvas.getContext('2d');
 
-        tempCanvas = document.createElement('canvas');
-        tempCtx = tempCanvas.getContext('2d');
+        workCanvas = document.createElement('canvas');
+        workCtx = workCanvas.getContext('2d');
 
-        // modelSelection: 0 — general model (лучше для людей в полный рост)
+        prevMaskCanvas = document.createElement('canvas');
+        prevMaskCtx = prevMaskCanvas.getContext('2d');
+
+        // modelSelection: 0 — general (люди в полный рост, несколько человек)
         selfieSegmentation = new SelfieSegmentation({
           locateFile: function(file) {
             return 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/' + file;
@@ -242,12 +247,26 @@
           modelSelection: 0,
           selfieMode: false
         });
-        selfieSegmentation.onResults(onSegmentationResults);
+        selfieSegmentation.onResults(processSegmentation);
 
         occlusionLoop();
       }
 
-      function onSegmentationResults(results) {
+      function ensureCanvasSize(cw, ch) {
+        var canvases = [
+          [overlayCanvas, overlayCtx],
+          [personCanvas, personCtx],
+          [maskCanvas, maskCtx],
+          [workCanvas, workCtx],
+          [prevMaskCanvas, prevMaskCtx]
+        ];
+        for (var i = 0; i < canvases.length; i++) {
+          if (canvases[i][0].width !== cw) canvases[i][0].width = cw;
+          if (canvases[i][0].height !== ch) canvases[i][0].height = ch;
+        }
+      }
+
+      function processSegmentation(results) {
         processingFrame = false;
         if (!occlusionActive) return;
 
@@ -257,58 +276,85 @@
 
         var cw = arCanvas.width;
         var ch = arCanvas.height;
-
-        if (overlayCanvas.width !== cw) overlayCanvas.width = cw;
-        if (overlayCanvas.height !== ch) overlayCanvas.height = ch;
-        if (personCanvas.width !== cw) personCanvas.width = cw;
-        if (personCanvas.height !== ch) personCanvas.height = ch;
-        if (maskCanvas.width !== cw) maskCanvas.width = cw;
-        if (maskCanvas.height !== ch) maskCanvas.height = ch;
-        if (tempCanvas.width !== cw) tempCanvas.width = cw;
-        if (tempCanvas.height !== ch) tempCanvas.height = ch;
+        ensureCanvasSize(cw, ch);
 
         var vw = videoEl.videoWidth;
         var vh = videoEl.videoHeight;
 
-        // Cover-масштабирование видео под размер AR-canvas
+        // Cover-масштабирование
         var scale = Math.max(cw / vw, ch / vh);
         var dw = vw * scale;
         var dh = vh * scale;
         var dx = (cw - dw) / 2;
         var dy = (ch - dh) / 2;
 
-        // --- 1. Бинарная маска в maskCanvas ---
-        // contrast(1000%) делает все пиксели маски 0 или 255 — без полупрозрачности
+        // --- ШАГ 1: Рисуем сырую маску в workCanvas ---
+        workCtx.clearRect(0, 0, cw, ch);
+        workCtx.drawImage(results.segmentationMask, dx, dy, dw, dh);
+
+        // --- ШАГ 2: Temporal smoothing (blend 70% текущая + 30% предыдущая) ---
         maskCtx.clearRect(0, 0, cw, ch);
-        maskCtx.filter = 'contrast(1000%)';
-        maskCtx.drawImage(results.segmentationMask, dx, dy, dw, dh);
-        maskCtx.filter = 'none';
+        maskCtx.globalAlpha = 0.7;
+        maskCtx.drawImage(workCanvas, 0, 0);
+        maskCtx.globalAlpha = 0.3;
+        maskCtx.drawImage(prevMaskCanvas, 0, 0);
+        maskCtx.globalAlpha = 1.0;
 
-        // --- 2. Дилатация маски на 1px (расширяем силуэт, чтобы перекрыть пионы) ---
-        tempCtx.clearRect(0, 0, cw, ch);
-        tempCtx.drawImage(maskCanvas, 0, 0);
-        maskCtx.globalCompositeOperation = 'source-over';
-        maskCtx.drawImage(tempCanvas, -1, 0);
-        maskCtx.drawImage(tempCanvas, 1, 0);
-        maskCtx.drawImage(tempCanvas, 0, -1);
-        maskCtx.drawImage(tempCanvas, 0, 1);
+        // --- ШАГ 3: Мягкий порог (contrast 3 = плавный переход 0.33–0.67) ---
+        workCtx.clearRect(0, 0, cw, ch);
+        workCtx.filter = 'contrast(3)';
+        workCtx.drawImage(maskCanvas, 0, 0);
+        workCtx.filter = 'none';
 
-        // --- 3. Лёгкое сглаживание края (blur 0.8px) ---
-        tempCtx.clearRect(0, 0, cw, ch);
-        tempCtx.filter = 'blur(0.8px)';
-        tempCtx.drawImage(maskCanvas, 0, 0);
-        tempCtx.filter = 'none';
         maskCtx.clearRect(0, 0, cw, ch);
-        maskCtx.drawImage(tempCanvas, 0, 0);
+        maskCtx.drawImage(workCanvas, 0, 0);
 
-        // --- 4. Person: кадр видео, обрезанный бинарной маской ---
+        // --- ШАГ 4: Морфологическое закрытие (dilate 2px → erode 2px) ---
+        // 4a. Dilate: объединение 5 смещённых копий
+        workCtx.clearRect(0, 0, cw, ch);
+        workCtx.drawImage(maskCanvas, 0, 0);
+        workCtx.drawImage(maskCanvas, 2, 0);
+        workCtx.drawImage(maskCanvas, -2, 0);
+        workCtx.drawImage(maskCanvas, 0, 2);
+        workCtx.drawImage(maskCanvas, 0, -2);
+
+        maskCtx.clearRect(0, 0, cw, ch);
+        maskCtx.drawImage(workCanvas, 0, 0);
+
+        // 4b. Erode: пересечение 5 смещённых копий (multiply = логическое И)
+        workCtx.clearRect(0, 0, cw, ch);
+        workCtx.globalCompositeOperation = 'multiply';
+        workCtx.drawImage(maskCanvas, 0, 0);
+        workCtx.drawImage(maskCanvas, 2, 0);
+        workCtx.drawImage(maskCanvas, -2, 0);
+        workCtx.drawImage(maskCanvas, 0, 2);
+        workCtx.drawImage(maskCanvas, 0, -2);
+        workCtx.globalCompositeOperation = 'source-over';
+
+        maskCtx.clearRect(0, 0, cw, ch);
+        maskCtx.drawImage(workCanvas, 0, 0);
+
+        // --- ШАГ 5: Edge feather (мягкие края, 1.5px) ---
+        workCtx.clearRect(0, 0, cw, ch);
+        workCtx.filter = 'blur(1.5px)';
+        workCtx.drawImage(maskCanvas, 0, 0);
+        workCtx.filter = 'none';
+
+        maskCtx.clearRect(0, 0, cw, ch);
+        maskCtx.drawImage(workCanvas, 0, 0);
+
+        // --- ШАГ 6: Сохраняем для temporal smoothing следующего кадра ---
+        prevMaskCtx.clearRect(0, 0, cw, ch);
+        prevMaskCtx.drawImage(maskCanvas, 0, 0);
+
+        // --- ШАГ 7: Создаём person overlay (видео × маска) ---
         personCtx.clearRect(0, 0, cw, ch);
         personCtx.drawImage(results.image, dx, dy, dw, dh);
         personCtx.globalCompositeOperation = 'destination-in';
         personCtx.drawImage(maskCanvas, 0, 0);
         personCtx.globalCompositeOperation = 'source-over';
 
-        // --- 5. Копируем person в overlay ---
+        // --- ШАГ 8: Отображаем ---
         overlayCtx.clearRect(0, 0, cw, ch);
         overlayCtx.drawImage(personCanvas, 0, 0);
       }
@@ -316,8 +362,8 @@
       function occlusionLoop() {
         if (occlusionActive) {
           frameCount++;
-          // Троттлинг: каждый 2-й кадр (30fps вместо 60)
-          if (frameCount % 2 === 0) {
+          // Throttle: каждый 3-й кадр (~20fps)
+          if (frameCount % 3 === 0) {
             var videoEl = document.querySelector('video');
             if (videoEl && videoEl.videoWidth > 0 && selfieSegmentation && !processingFrame) {
               processingFrame = true;
@@ -332,7 +378,6 @@
         requestAnimationFrame(occlusionLoop);
       }
 
-      // Инициализация после загрузки сцены
       var sceneEl = document.querySelector('a-scene');
       function tryInitOcclusion() {
         var arCanvas = document.querySelector('a-scene canvas');
@@ -348,7 +393,7 @@
       });
 
       // =====================================================
-      // ФОТО — композит: видео → AR (маскированный) → человек
+      // ФОТО — трёхслойный композит
       // =====================================================
 
       var photoBtn = document.getElementById('photo-btn');
@@ -362,8 +407,8 @@
           requestAnimationFrame(function() {
             var canvas3d = document.querySelector('a-scene canvas') || document.querySelector('.a-canvas');
             var videoEl = document.querySelector('video');
-
             if (!canvas3d) return;
+
             var w = canvas3d.width;
             var h = canvas3d.height;
 
@@ -372,16 +417,15 @@
             outCanvas.height = h;
             var ctx = outCanvas.getContext('2d');
 
-            // Helper: отрисовка с учётом зеркала
-            function drawMirror(drawFn) {
+            function drawMirror(fn) {
               if (isMirror) {
                 ctx.save();
                 ctx.translate(w, 0);
                 ctx.scale(-1, 1);
-                drawFn();
+                fn();
                 ctx.restore();
               } else {
-                drawFn();
+                fn();
               }
             }
 
@@ -406,7 +450,6 @@
             var arCtx = arTemp.getContext('2d');
             arCtx.drawImage(canvas3d, 0, 0, w, h);
 
-            // Стираем AR-пиксели там, где есть человек (destination-out)
             if (maskCanvas && maskCanvas.width === w) {
               arCtx.globalCompositeOperation = 'destination-out';
               arCtx.drawImage(maskCanvas, 0, 0);
@@ -417,14 +460,13 @@
               ctx.drawImage(arTemp, 0, 0);
             });
 
-            // 3. Человек поверх (точные пиксели видео, обрезанные маской)
+            // 3. Человек поверх
             if (personCanvas && personCanvas.width === w) {
               drawMirror(function() {
                 ctx.drawImage(personCanvas, 0, 0);
               });
             }
 
-            // Скачивание
             try {
               var dataURL = outCanvas.toDataURL('image/png');
               var link = document.createElement('a');
@@ -439,7 +481,7 @@
       });
 
       // =====================================================
-      // КОНФИГУРАЦИЯ ПИОНОВ
+      // ПИОНЫ
       // =====================================================
 
       var mainConfig = [
@@ -494,8 +536,7 @@
         var el = document.createElement('a-image');
         el.setAttribute('id', id);
         el.setAttribute('src', src);
-        // alphaTest 0.2 — отсекает полупрозрачные пиксели, меньше "призраков"
-        el.setAttribute('material', 'transparent: true; alphaTest: 0.2');
+        el.setAttribute('material', 'transparent: true; alphaTest: 0.15');
         var posStr = x + ' ' + y + ' 0';
         el.setAttribute('position', posStr);
         el.setAttribute('rotation', '0 ' + rot + ' 0');
@@ -563,7 +604,6 @@
             hideTimer = null;
           }, 250);
         }
-        // Активируем occlusion
         occlusionActive = true;
         resetAll();
         setTimeout(bloomAll, 100);
@@ -579,7 +619,6 @@
             showTimer = null;
           }, 800);
         }
-        // Останавливаем occlusion, очищаем overlay
         occlusionActive = false;
         if (overlayCtx && overlayCanvas) {
           overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
