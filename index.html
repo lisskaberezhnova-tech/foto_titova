@@ -7,7 +7,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
 
     <script>
       (function() {
@@ -55,7 +54,7 @@
         transition: all 0.2s;
         display: flex; align-items: center; justify-content: center;
       }
-      #switch-cam:active { transform: scale(0.92); box-shadow: 0 2px 6px rgba(0,0,0,0.45); }
+      #switch-cam:active { transform: scale(0.92); }
       #switch-cam svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
 
       #mirror-cam {
@@ -67,7 +66,7 @@
         transition: all 0.2s; display: none;
         align-items: center; justify-content: center;
       }
-      #mirror-cam:active { transform: scale(0.92); box-shadow: 0 2px 6px rgba(0,0,0,0.45); }
+      #mirror-cam:active { transform: scale(0.92); }
       #mirror-cam svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
 
       #photo-btn {
@@ -161,8 +160,6 @@
         mirrorBtn.style.display = 'flex';
       }
 
-      var overlayCanvas = null;
-
       function applyMirror() {
         var videoEl = document.querySelector('video');
         if (videoEl) {
@@ -174,9 +171,6 @@
           canvases[0].style.transform = isMirror ? 'scaleX(-1)' : 'none';
           container.setAttribute('scale', isMirror ? '-1 1 1' : '1 1 1');
         }
-        if (overlayCanvas) {
-          overlayCanvas.style.transform = isMirror ? 'scaleX(-1)' : 'none';
-        }
       }
 
       mirrorBtn.addEventListener('click', function() {
@@ -184,218 +178,7 @@
         applyMirror();
       });
 
-      // =====================================================
-      // OCCLUSION — улучшенный пайплайн маски
-      // =====================================================
-
-      var selfieSegmentation = null;
-      var overlayCtx = null;
-      var personCanvas = null;
-      var personCtx = null;
-      var maskCanvas = null;
-      var maskCtx = null;
-      var workCanvas = null;
-      var workCtx = null;
-      var prevMaskCanvas = null;
-      var prevMaskCtx = null;
-
-      var occlusionActive = false;
-      var processingFrame = false;
-      var frameCount = 0;
-      var lastVideoDims = { w: 0, h: 0 };
-
-      function initOcclusion() {
-        if (typeof SelfieSegmentation === 'undefined') {
-          console.warn('SelfieSegmentation не загружен, occlusion отключён');
-          return;
-        }
-
-        // overlay — видимый DOM-canvas поверх AR
-        overlayCanvas = document.createElement('canvas');
-        overlayCanvas.id = 'occlusion-overlay';
-        overlayCanvas.style.position = 'fixed';
-        overlayCanvas.style.top = '0';
-        overlayCanvas.style.left = '0';
-        overlayCanvas.style.width = '100%';
-        overlayCanvas.style.height = '100%';
-        overlayCanvas.style.zIndex = '5';
-        overlayCanvas.style.pointerEvents = 'none';
-        overlayCanvas.style.transformOrigin = '50% 50%';
-        document.body.appendChild(overlayCanvas);
-        overlayCtx = overlayCanvas.getContext('2d');
-
-        // Рабочие canvas (внутренние, не в DOM)
-        personCanvas = document.createElement('canvas');
-        personCtx = personCanvas.getContext('2d');
-
-        maskCanvas = document.createElement('canvas');
-        maskCtx = maskCanvas.getContext('2d');
-
-        workCanvas = document.createElement('canvas');
-        workCtx = workCanvas.getContext('2d');
-
-        prevMaskCanvas = document.createElement('canvas');
-        prevMaskCtx = prevMaskCanvas.getContext('2d');
-
-        // modelSelection: 0 — general (люди в полный рост, несколько человек)
-        selfieSegmentation = new SelfieSegmentation({
-          locateFile: function(file) {
-            return 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/' + file;
-          }
-        });
-        selfieSegmentation.setOptions({
-          modelSelection: 0,
-          selfieMode: false
-        });
-        selfieSegmentation.onResults(processSegmentation);
-
-        occlusionLoop();
-      }
-
-      function ensureCanvasSize(cw, ch) {
-        var canvases = [
-          [overlayCanvas, overlayCtx],
-          [personCanvas, personCtx],
-          [maskCanvas, maskCtx],
-          [workCanvas, workCtx],
-          [prevMaskCanvas, prevMaskCtx]
-        ];
-        for (var i = 0; i < canvases.length; i++) {
-          if (canvases[i][0].width !== cw) canvases[i][0].width = cw;
-          if (canvases[i][0].height !== ch) canvases[i][0].height = ch;
-        }
-      }
-
-      function processSegmentation(results) {
-        processingFrame = false;
-        if (!occlusionActive) return;
-
-        var videoEl = document.querySelector('video');
-        var arCanvas = document.querySelector('a-scene canvas') || document.querySelector('.a-canvas');
-        if (!videoEl || videoEl.videoWidth === 0 || !arCanvas) return;
-
-        var cw = arCanvas.width;
-        var ch = arCanvas.height;
-        ensureCanvasSize(cw, ch);
-
-        var vw = videoEl.videoWidth;
-        var vh = videoEl.videoHeight;
-
-        // Cover-масштабирование
-        var scale = Math.max(cw / vw, ch / vh);
-        var dw = vw * scale;
-        var dh = vh * scale;
-        var dx = (cw - dw) / 2;
-        var dy = (ch - dh) / 2;
-
-        // --- ШАГ 1: Рисуем сырую маску в workCanvas ---
-        workCtx.clearRect(0, 0, cw, ch);
-        workCtx.drawImage(results.segmentationMask, dx, dy, dw, dh);
-
-        // --- ШАГ 2: Temporal smoothing (blend 70% текущая + 30% предыдущая) ---
-        maskCtx.clearRect(0, 0, cw, ch);
-        maskCtx.globalAlpha = 0.7;
-        maskCtx.drawImage(workCanvas, 0, 0);
-        maskCtx.globalAlpha = 0.3;
-        maskCtx.drawImage(prevMaskCanvas, 0, 0);
-        maskCtx.globalAlpha = 1.0;
-
-        // --- ШАГ 3: Мягкий порог (contrast 3 = плавный переход 0.33–0.67) ---
-        workCtx.clearRect(0, 0, cw, ch);
-        workCtx.filter = 'contrast(3)';
-        workCtx.drawImage(maskCanvas, 0, 0);
-        workCtx.filter = 'none';
-
-        maskCtx.clearRect(0, 0, cw, ch);
-        maskCtx.drawImage(workCanvas, 0, 0);
-
-        // --- ШАГ 4: Морфологическое закрытие (dilate 2px → erode 2px) ---
-        // 4a. Dilate: объединение 5 смещённых копий
-        workCtx.clearRect(0, 0, cw, ch);
-        workCtx.drawImage(maskCanvas, 0, 0);
-        workCtx.drawImage(maskCanvas, 2, 0);
-        workCtx.drawImage(maskCanvas, -2, 0);
-        workCtx.drawImage(maskCanvas, 0, 2);
-        workCtx.drawImage(maskCanvas, 0, -2);
-
-        maskCtx.clearRect(0, 0, cw, ch);
-        maskCtx.drawImage(workCanvas, 0, 0);
-
-        // 4b. Erode: пересечение 5 смещённых копий (multiply = логическое И)
-        workCtx.clearRect(0, 0, cw, ch);
-        workCtx.globalCompositeOperation = 'multiply';
-        workCtx.drawImage(maskCanvas, 0, 0);
-        workCtx.drawImage(maskCanvas, 2, 0);
-        workCtx.drawImage(maskCanvas, -2, 0);
-        workCtx.drawImage(maskCanvas, 0, 2);
-        workCtx.drawImage(maskCanvas, 0, -2);
-        workCtx.globalCompositeOperation = 'source-over';
-
-        maskCtx.clearRect(0, 0, cw, ch);
-        maskCtx.drawImage(workCanvas, 0, 0);
-
-        // --- ШАГ 5: Edge feather (мягкие края, 1.5px) ---
-        workCtx.clearRect(0, 0, cw, ch);
-        workCtx.filter = 'blur(1.5px)';
-        workCtx.drawImage(maskCanvas, 0, 0);
-        workCtx.filter = 'none';
-
-        maskCtx.clearRect(0, 0, cw, ch);
-        maskCtx.drawImage(workCanvas, 0, 0);
-
-        // --- ШАГ 6: Сохраняем для temporal smoothing следующего кадра ---
-        prevMaskCtx.clearRect(0, 0, cw, ch);
-        prevMaskCtx.drawImage(maskCanvas, 0, 0);
-
-        // --- ШАГ 7: Создаём person overlay (видео × маска) ---
-        personCtx.clearRect(0, 0, cw, ch);
-        personCtx.drawImage(results.image, dx, dy, dw, dh);
-        personCtx.globalCompositeOperation = 'destination-in';
-        personCtx.drawImage(maskCanvas, 0, 0);
-        personCtx.globalCompositeOperation = 'source-over';
-
-        // --- ШАГ 8: Отображаем ---
-        overlayCtx.clearRect(0, 0, cw, ch);
-        overlayCtx.drawImage(personCanvas, 0, 0);
-      }
-
-      function occlusionLoop() {
-        if (occlusionActive) {
-          frameCount++;
-          // Throttle: каждый 3-й кадр (~20fps)
-          if (frameCount % 3 === 0) {
-            var videoEl = document.querySelector('video');
-            if (videoEl && videoEl.videoWidth > 0 && selfieSegmentation && !processingFrame) {
-              processingFrame = true;
-              try {
-                selfieSegmentation.send({ image: videoEl });
-              } catch(e) {
-                processingFrame = false;
-              }
-            }
-          }
-        }
-        requestAnimationFrame(occlusionLoop);
-      }
-
-      var sceneEl = document.querySelector('a-scene');
-      function tryInitOcclusion() {
-        var arCanvas = document.querySelector('a-scene canvas');
-        var videoEl = document.querySelector('video');
-        if (arCanvas && videoEl && videoEl.videoWidth > 0) {
-          initOcclusion();
-        } else {
-          setTimeout(tryInitOcclusion, 300);
-        }
-      }
-      sceneEl.addEventListener('loaded', function() {
-        setTimeout(tryInitOcclusion, 500);
-      });
-
-      // =====================================================
-      // ФОТО — трёхслойный композит
-      // =====================================================
-
+      // === Фото ===
       var photoBtn = document.getElementById('photo-btn');
       var flashEl = document.getElementById('flash');
 
@@ -429,7 +212,7 @@
               }
             }
 
-            // 1. Видео — фон
+            // Видео — фон
             if (videoEl && videoEl.videoWidth > 0) {
               var vw = videoEl.videoWidth;
               var vh = videoEl.videoHeight;
@@ -443,29 +226,10 @@
               });
             }
 
-            // 2. AR с маской: стираем пионы там, где человек
-            var arTemp = document.createElement('canvas');
-            arTemp.width = w;
-            arTemp.height = h;
-            var arCtx = arTemp.getContext('2d');
-            arCtx.drawImage(canvas3d, 0, 0, w, h);
-
-            if (maskCanvas && maskCanvas.width === w) {
-              arCtx.globalCompositeOperation = 'destination-out';
-              arCtx.drawImage(maskCanvas, 0, 0);
-              arCtx.globalCompositeOperation = 'source-over';
-            }
-
+            // AR поверх
             drawMirror(function() {
-              ctx.drawImage(arTemp, 0, 0);
+              ctx.drawImage(canvas3d, 0, 0, w, h);
             });
-
-            // 3. Человек поверх
-            if (personCanvas && personCanvas.width === w) {
-              drawMirror(function() {
-                ctx.drawImage(personCanvas, 0, 0);
-              });
-            }
 
             try {
               var dataURL = outCanvas.toDataURL('image/png');
@@ -481,48 +245,64 @@
       });
 
       // =====================================================
-      // ПИОНЫ
+      // АСИММЕТРИЧНАЯ АРКА ИЗ ПИОНОВ
+      // Левая сторона — выше и гуще, правая — ниже и легче
       // =====================================================
 
+      // 5 основных открытых пионов — каркас арки
       var mainConfig = [
-        { id: 'p1', src: 'peony.png', x: 0, y: 0, rot: 0, scale: 1.05, dur: 800, fade: 300 },
-        { id: 'p2', src: 'peony.png', x: -0.38, y: 0.72, rot: 5, scale: 0.65, dur: 700, fade: 280 },
-        { id: 'p3', src: 'peony.png', x: -0.36, y: -0.65, rot: 5, scale: 0.6, dur: 650, fade: 260 },
-        { id: 'p4', src: 'peony.png', x: 0.4, y: 0.75, rot: -5, scale: 0.6, dur: 600, fade: 240 },
-        { id: 'p5', src: 'peony.png', x: 0.38, y: -0.7, rot: -5, scale: 0.55, dur: 550, fade: 220 }
+        // Макушка арки, чуть левее центра
+        { id: 'p1', src: 'peony.png',   x: -0.15, y: 1.25,  rot: -3,  scale: 1.0,  dur: 800, fade: 300 },
+        // Левая сторона, верх
+        { id: 'p2', src: 'peony.png',   x: -0.85, y: 1.05,  rot: 8,   scale: 0.72, dur: 700, fade: 280 },
+        // Левая сторона, ниже ( арка спускается)
+        { id: 'p3', src: 'peony.png',   x: -1.15, y: 0.45,  rot: 12,  scale: 0.6,  dur: 650, fade: 260 },
+        // Правая сторона, верх — ниже левой
+        { id: 'p4', src: 'peony.png',   x: 0.55,  y: 0.95,  rot: -8,  scale: 0.65, dur: 600, fade: 240 },
+        // Правая сторона, ниже — арка спускается ниже
+        { id: 'p5', src: 'peony.png',   x: 0.9,   y: 0.35,  rot: -12, scale: 0.52, dur: 550, fade: 220 }
       ];
 
+      // 6 полураскрытых — заполняют арку
       var halfOpen = [
-        { x: -0.62, y: 0.3, rot: 10, scale: 0.34 },
-        { x: 0.6, y: -0.3, rot: -8, scale: 0.32 },
-        { x: -0.2, y: -0.98, rot: 5, scale: 0.35 },
-        { x: 0.18, y: 0.98, rot: -5, scale: 0.33 },
-        { x: 0.68, y: 0.35, rot: -10, scale: 0.34 },
-        { x: -0.68, y: -0.15, rot: 8, scale: 0.32 }
+        // Левая ветвь (гуще)
+        { x: -0.5,  y: 1.35, rot: 5,   scale: 0.38 },
+        { x: -1.0,  y: 0.75, rot: 10,  scale: 0.36 },
+        { x: -1.25, y: 0.05, rot: 15,  scale: 0.34 },
+        // Правая ветвь (легче)
+        { x: 0.25,  y: 1.2,  rot: -5,  scale: 0.36 },
+        { x: 0.7,   y: 0.65, rot: -10, scale: 0.34 },
+        { x: 1.0,   y: 0.0,  rot: -15, scale: 0.3 },
       ];
 
+      // 6 раскрывающихся — средний размер
       var opening = [
-        { x: 0.55, y: 0.28, rot: -5, scale: 0.52 },
-        { x: -0.52, y: -0.28, rot: 8, scale: 0.5 },
-        { x: -0.72, y: 0.08, rot: 5, scale: 0.54 },
-        { x: 0.7, y: -0.45, rot: -8, scale: 0.48 },
-        { x: -0.05, y: -1.0, rot: 3, scale: 0.53 },
-        { x: 0.05, y: 1.05, rot: -3, scale: 0.51 }
+        // Левая ветвь
+        { x: -0.35, y: 0.95,  rot: 3,   scale: 0.5 },
+        { x: -0.75, y: 0.5,   rot: 8,   scale: 0.48 },
+        { x: -1.05, y: 0.85,  rot: 6,   scale: 0.46 },
+        // Правая ветвь
+        { x: 0.4,   y: 0.5,   rot: -3,  scale: 0.48 },
+        { x: 0.65,  y: 0.15,  rot: -8,  scale: 0.44 },
+        { x: 0.15,  y: 0.75,  rot: 0,   scale: 0.46 }
       ];
 
+      // 12 бутонов — россыпь по арке, самые маленькие
       var buds = [
-        { x: -0.82, y: 0.45, scale: 0.2 },
-        { x: 0.8, y: 0.5, scale: 0.19 },
-        { x: -0.5, y: 1.05, scale: 0.21 },
-        { x: 0.48, y: -0.95, scale: 0.2 },
-        { x: -0.78, y: -0.4, scale: 0.18 },
-        { x: 0.82, y: -0.05, scale: 0.22 },
-        { x: -0.15, y: -1.12, scale: 0.19 },
-        { x: 0.25, y: 1.12, scale: 0.21 },
-        { x: -0.88, y: 0.12, scale: 0.17 },
-        { x: 0.85, y: 0.18, scale: 0.2 },
-        { x: -0.42, y: -1.05, scale: 0.18 },
-        { x: 0.42, y: 1.0, scale: 0.19 }
+        // Левая ветвь (больше бутонов)
+        { x: -0.7,  y: 1.45, scale: 0.22 },
+        { x: -1.1,  y: 1.2,  scale: 0.2 },
+        { x: -1.3,  y: 0.75, scale: 0.19 },
+        { x: -1.35, y: 0.2,  scale: 0.18 },
+        { x: -0.55, y: 1.1,  scale: 0.21 },
+        { x: -0.95, y: 0.3,  scale: 0.19 },
+        { x: -0.2,  y: 1.5,  scale: 0.2 },
+        // Правая ветвь (меньше бутонов)
+        { x: 0.45,  y: 1.3,  scale: 0.2 },
+        { x: 0.8,   y: 0.85, scale: 0.19 },
+        { x: 1.05,  y: 0.55, scale: 0.18 },
+        { x: 1.1,   y: -0.1, scale: 0.17 },
+        { x: 0.3,   y: 0.95, scale: 0.2 }
       ];
 
       var container = document.getElementById('container');
@@ -536,7 +316,7 @@
         var el = document.createElement('a-image');
         el.setAttribute('id', id);
         el.setAttribute('src', src);
-        el.setAttribute('material', 'transparent: true; alphaTest: 0.15');
+        el.setAttribute('material', 'transparent: true; alphaTest: 0.1');
         var posStr = x + ' ' + y + ' 0';
         el.setAttribute('position', posStr);
         el.setAttribute('rotation', '0 ' + rot + ' 0');
@@ -566,12 +346,107 @@
         createPeony('b' + i, 'peony_bud.png', p.x, p.y, rot, p.scale, 400 + Math.floor(Math.random() * 200), 180 + Math.floor(Math.random() * 100));
       });
 
+      // =====================================================
+      // СВЕРКАНИЕ — росинка/роса на пионах
+      // =====================================================
+
+      // Генерируем sparkle-точку как data-URI (звёздочка с мягким свечением)
+      var sparkleSVG = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">' +
+        '<defs><radialGradient id="g" cx="50%" cy="50%" r="50%">' +
+        '<stop offset="0%" stop-color="#fff" stop-opacity="1"/>' +
+        '<stop offset="20%" stop-color="#fff8e0" stop-opacity="0.9"/>' +
+        '<stop offset="100%" stop-color="#fff8e0" stop-opacity="0"/>' +
+        '</radialGradient></defs>' +
+        '<circle cx="32" cy="32" r="14" fill="url(#g)"/>' +
+        '<path d="M32 6 L34 30 L58 32 L34 34 L32 58 L30 34 L6 32 L30 30 Z" fill="#fff" opacity="0.85"/>' +
+        '</svg>';
+      var sparkleDataURI = 'data:image/svg+xml;base64,' + btoa(sparkleSVG);
+
+      // Позиции сверкающих точек — вдоль арки, возле пионов
+      var sparklePositions = [
+        // Левая ветвь
+        { x: -0.12, y: 1.22 }, { x: -0.3, y: 1.4 }, { x: -0.6, y: 1.15 },
+        { x: -0.88, y: 0.95 }, { x: -1.1, y: 0.6 }, { x: -1.2, y: 0.3 },
+        { x: -0.45, y: 0.85 }, { x: -0.75, y: 0.4 }, { x: -1.0, y: 1.0 },
+        { x: -0.2, y: 1.55 }, { x: -0.55, y: 1.5 },
+        // Правая ветвь
+        { x: 0.5, y: 0.9 }, { x: 0.75, y: 0.55 }, { x: 0.95, y: 0.25 },
+        { x: 0.3, y: 1.15 }, { x: 0.6, y: 0.35 }, { x: 0.2, y: 0.7 },
+        { x: 0.45, y: 1.35 }, { x: 0.85, y: 0.7 }, { x: 1.05, y: 0.1 },
+        // Доп. точки в центре арки
+        { x: 0.0, y: 1.1 }, { x: -0.05, y: 0.8 }, { x: 0.1, y: 1.3 }
+      ];
+
+      var sparkles = [];
+
+      sparklePositions.forEach(function(pos, i) {
+        var el = document.createElement('a-image');
+        el.setAttribute('id', 'spark' + i);
+        el.setAttribute('src', sparkleDataURI);
+        el.setAttribute('material', 'transparent: true; opacity: 0');
+        el.setAttribute('position', pos.x + ' ' + pos.y + ' 0.01');
+        var sparkSize = 0.06 + Math.random() * 0.06;
+        el.setAttribute('scale', sparkSize + ' ' + sparkSize + ' 1');
+
+        // Две фазы мигания: появление + исчезновение
+        var twinkleDur = 800 + Math.floor(Math.random() * 1200);
+        var pauseDur = 600 + Math.floor(Math.random() * 2000);
+
+        el.setAttribute('animation__twinkleIn',
+          'property: material.opacity; from: 0; to: 0.9; dur: ' + twinkleDur + '; easing: easeOutCubic; startEvents: twinkle');
+        el.setAttribute('animation__twinkleOut',
+          'property: material.opacity; from: 0.9; to: 0; dur: ' + twinkleDur + '; delay: ' + twinkleDur + '; easing: easeInCubic; startEvents: twinkle');
+
+        // Лёгкое увеличение при появлении
+        el.setAttribute('animation__pulse',
+          'property: scale; from: ' + (sparkSize * 0.5) + ' ' + (sparkSize * 0.5) + ' 1; to: ' + sparkSize + ' ' + sparkSize + ' 1; dur: ' + twinkleDur + '; easing: easeOutCubic; startEvents: twinkle');
+
+        container.appendChild(el);
+        sparkles.push({ el: el, pauseDur: pauseDur, twinkleDur: twinkleDur });
+      });
+
+      var sparkleTimers = [];
+      var sparkleActive = false;
+
+      function scheduleSparkle(spark, index) {
+        if (!sparkleActive) return;
+        var delay = Math.random() * spark.pauseDur;
+        var timer = setTimeout(function() {
+          if (!sparkleActive) return;
+          spark.el.emit('twinkle');
+          // Следующий цикл
+          scheduleSparkle(spark, index);
+        }, delay);
+        sparkleTimers.push(timer);
+      }
+
+      function startSparkles() {
+        sparkleActive = true;
+        sparkles.forEach(function(spark, i) {
+          scheduleSparkle(spark, i);
+        });
+      }
+
+      function stopSparkles() {
+        sparkleActive = false;
+        sparkleTimers.forEach(function(t) { clearTimeout(t); });
+        sparkleTimers = [];
+        sparkles.forEach(function(spark) {
+          spark.el.setAttribute('material', 'opacity', '0');
+        });
+      }
+
+      // =====================================================
+      // СБРОС И ПОЯВЛЕНИЕ
+      // =====================================================
+
       function resetAll() {
         allPeonies.forEach(function(el) {
           el.setAttribute('scale', '0.001 0.001 1');
           el.setAttribute('opacity', '0');
           el.setAttribute('position', origPos[el.getAttribute('id')]);
         });
+        stopSparkles();
       }
 
       function shuffle(arr) {
@@ -590,6 +465,8 @@
           var delay = Math.floor(i * step + Math.random() * (step * 0.5));
           setTimeout(function() { el.emit('bloom'); }, delay);
         });
+        // Запускаем сверкание через 1.2 сек (после появления пионов)
+        setTimeout(startSparkles, 1200);
       }
 
       var hideTimer = null;
@@ -604,7 +481,6 @@
             hideTimer = null;
           }, 250);
         }
-        occlusionActive = true;
         resetAll();
         setTimeout(bloomAll, 100);
       });
@@ -618,10 +494,6 @@
             scanOverlay.classList.remove('hidden');
             showTimer = null;
           }, 800);
-        }
-        occlusionActive = false;
-        if (overlayCtx && overlayCanvas) {
-          overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
         }
       });
     </script>
