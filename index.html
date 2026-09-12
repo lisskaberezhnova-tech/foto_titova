@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>AR Photo Zone — Пионы</title>
+    <title>AR Photo Zone — Пионы (v3.1)</title>
 
     <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
@@ -13,7 +13,6 @@
         const params = new URLSearchParams(window.location.search);
         const cam = params.get('camera') || 'back';
         const facingMode = cam === 'front' ? 'user' : 'environment';
-
         const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
         navigator.mediaDevices.getUserMedia = function(constraints) {
           if (constraints && constraints.video !== undefined && constraints.video !== false) {
@@ -31,8 +30,7 @@
     <style>
       html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
       canvas { display: block; width: 100% !important; height: 100% !important; }
-      a-scene { width: 100vw !important; height: 100vh !important; }
-
+      a-scene { width: 100vw !important; height: 100vh !important; display: block; margin: 0 auto; }
       #hint {
         position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
         background: rgba(0,0,0,0.6); color: #fff; padding: 10px 18px;
@@ -41,20 +39,15 @@
         pointer-events: none; text-align: center;
       }
       #hint.hidden { opacity: 0; }
-
       #switch-cam {
         position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
         background: rgba(255,255,255,0.9); border: none;
         width: 56px; height: 56px; border-radius: 50%;
         z-index: 100; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-        transition: all 0.2s;
-        display: flex; align-items: center; justify-content: center;
+        transition: all 0.2s; display: flex; align-items: center; justify-content: center;
       }
-      #switch-cam:active {
-        background: #fff; transform: translateX(-50%) scale(0.95);
-      }
+      #switch-cam:active { background: #fff; transform: translateX(-50%) scale(0.95); }
       #switch-cam svg { width: 28px; height: 28px; }
-
       #scan-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 90; pointer-events: none;
@@ -63,29 +56,17 @@
       }
       #scan-overlay.hidden { opacity: 0; }
       #scan-frame { width: 200px; height: 200px; position: relative; }
-      .scan-corner {
-        position: absolute; width: 30px; height: 30px;
-        border: 2px solid rgba(255,255,255,0.7); border-radius: 2px;
-      }
+      .scan-corner { position: absolute; width: 30px; height: 30px; border: 2px solid rgba(255,255,255,0.7); border-radius: 2px; }
       .scan-corner.tl { top: 0; left: 0; border-right: none; border-bottom: none; }
       .scan-corner.tr { top: 0; right: 0; border-left: none; border-bottom: none; }
       .scan-corner.bl { bottom: 0; left: 0; border-right: none; border-top: none; }
       .scan-corner.br { bottom: 0; right: 0; border-left: none; border-top: none; }
-      .scan-line {
-        position: absolute; left: 0; width: 100%; height: 1px;
-        background: rgba(255,255,255,0.5);
-        animation: scanmove 2.5s ease-in-out infinite;
-      }
-      @keyframes scanmove {
-        0% { top: 0; opacity: 0.3; }
-        50% { top: 100%; opacity: 0.8; }
-        100% { top: 0; opacity: 0.3; }
-      }
+      .scan-line { position: absolute; left: 0; width: 100%; height: 1px; background: rgba(255,255,255,0.5); animation: scanmove 2.5s ease-in-out infinite; }
+      @keyframes scanmove { 0% { top: 0; opacity: 0.3; } 50% { top: 100%; opacity: 0.8; } 100% { top: 0; opacity: 0.3; } }
     </style>
   </head>
   <body>
     <div id="hint">Наведите камеру на метку</div>
-
     <div id="scan-overlay">
       <div id="scan-frame">
         <div class="scan-corner tl"></div>
@@ -95,7 +76,6 @@
         <div class="scan-line"></div>
       </div>
     </div>
-
     <button id="switch-cam">
       <svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="23 4 23 10 17 10"></polyline>
@@ -119,90 +99,78 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-entity mindar-image-target="targetIndex: 0" id="target">
-        <!-- 5 основных открытых пионов -->
         <a-image src="peony.png" id="p1" material="transparent: true; alphaTest: 0.05"
           position="0 0 0" rotation="0 0 0" scale="0.001 0.001 1" opacity="0"
-          animation__grow="property: scale; from: 0.001 0.001 1; to: 1.05 1.05 1; dur: 3000; easing: easeOutCubic; startEvents: bloom"
-          animation__fade="property: opacity; from: 0; to: 1; dur: 800; easing: easeOutCubic; startEvents: bloom">
-        </a-image>
+          animation__grow="property: scale; from: 0.001 0.001 1; to: 1.05 1.05 1; dur: 3200; easing: easeOutCubic; startEvents: bloom"
+          animation__fade="property: opacity; from: 0; to: 1; dur: 800; easing: easeOutCubic; startEvents: bloom"></a-image>
         <a-image src="peony.png" id="p2" material="transparent: true; alphaTest: 0.05"
           position="-0.38 0.72 0" rotation="0 5 0" scale="0.001 0.001 1" opacity="0"
           animation__grow="property: scale; from: 0.001 0.001 1; to: 0.65 0.65 1; dur: 2600; easing: easeOutCubic; startEvents: bloom"
-          animation__fade="property: opacity; from: 0; to: 1; dur: 700; easing: easeOutCubic; startEvents: bloom">
-        </a-image>
+          animation__fade="property: opacity; from: 0; to: 1; dur: 700; easing: easeOutCubic; startEvents: bloom"></a-image>
         <a-image src="peony.png" id="p3" material="transparent: true; alphaTest: 0.05"
           position="-0.36 -0.65 0" rotation="0 5 0" scale="0.001 0.001 1" opacity="0"
           animation__grow="property: scale; from: 0.001 0.001 1; to: 0.6 0.6 1; dur: 2400; easing: easeOutCubic; startEvents: bloom"
-          animation__fade="property: opacity; from: 0; to: 1; dur: 650; easing: easeOutCubic; startEvents: bloom">
-        </a-image>
+          animation__fade="property: opacity; from: 0; to: 1; dur: 650; easing: easeOutCubic; startEvents: bloom"></a-image>
         <a-image src="peony.png" id="p4" material="transparent: true; alphaTest: 0.05"
           position="0.4 0.75 0" rotation="0 -5 0" scale="0.001 0.001 1" opacity="0"
           animation__grow="property: scale; from: 0.001 0.001 1; to: 0.6 0.6 1; dur: 2200; easing: easeOutCubic; startEvents: bloom"
-          animation__fade="property: opacity; from: 0; to: 1; dur: 600; easing: easeOutCubic; startEvents: bloom">
-        </a-image>
+          animation__fade="property: opacity; from: 0; to: 1; dur: 600; easing: easeOutCubic; startEvents: bloom"></a-image>
         <a-image src="peony.png" id="p5" material="transparent: true; alphaTest: 0.05"
           position="0.38 -0.7 0" rotation="0 -5 0" scale="0.001 0.001 1" opacity="0"
           animation__grow="property: scale; from: 0.001 0.001 1; to: 0.55 0.55 1; dur: 2000; easing: easeOutCubic; startEvents: bloom"
-          animation__fade="property: opacity; from: 0; to: 1; dur: 550; easing: easeOutCubic; startEvents: bloom">
-        </a-image>
+          animation__fade="property: opacity; from: 0; to: 1; dur: 550; easing: easeOutCubic; startEvents: bloom"></a-image>
       </a-entity>
     </a-scene>
 
     <script>
-      // Кнопка переключения камеры
       const switchBtn = document.getElementById('switch-cam');
       const params = new URLSearchParams(window.location.search);
       const currentCam = params.get('camera') || 'back';
-      switchBtn.addEventListener('click', () => {
+      switchBtn.addEventListener('click', function() {
         const newCam = currentCam === 'front' ? 'back' : 'front';
         window.location.href = window.location.pathname + '?camera=' + newCam;
       });
 
-      // === Конфигурация всех дополнительных пионов ===
-
-      // Полураскрытые — крупнее, 6 шт
-      const halfOpen = [
-        { x: -0.62, y: 0.3, rot: 10, scale: 0.5 },
-        { x: 0.6, y: -0.3, rot: -8, scale: 0.48 },
-        { x: -0.2, y: -0.98, rot: 5, scale: 0.45 },
-        { x: 0.18, y: 0.98, rot: -5, scale: 0.5 },
-        { x: 0.68, y: 0.35, rot: -10, scale: 0.42 },
-        { x: -0.68, y: -0.15, rot: 8, scale: 0.44 },
+      var halfOpen = [
+        { x: -0.62, y: 0.3, rot: 10, scale: 0.34 },
+        { x: 0.6, y: -0.3, rot: -8, scale: 0.32 },
+        { x: -0.2, y: -0.98, rot: 5, scale: 0.35 },
+        { x: 0.18, y: 0.98, rot: -5, scale: 0.33 },
+        { x: 0.68, y: 0.35, rot: -10, scale: 0.34 },
+        { x: -0.68, y: -0.15, rot: 8, scale: 0.32 }
       ];
 
-      // На этапе раскрытия — крупнее, 6 шт
-      const opening = [
-        { x: 0.55, y: 0.28, rot: -5, scale: 0.48 },
-        { x: -0.52, y: -0.28, rot: 8, scale: 0.45 },
-        { x: -0.72, y: 0.08, rot: 5, scale: 0.42 },
-        { x: 0.7, y: -0.45, rot: -8, scale: 0.4 },
-        { x: -0.05, y: -1.0, rot: 3, scale: 0.46 },
-        { x: 0.05, y: 1.05, rot: -3, scale: 0.44 },
+      var opening = [
+        { x: 0.55, y: 0.28, rot: -5, scale: 0.52 },
+        { x: -0.52, y: -0.28, rot: 8, scale: 0.5 },
+        { x: -0.72, y: 0.08, rot: 5, scale: 0.54 },
+        { x: 0.7, y: -0.45, rot: -8, scale: 0.48 },
+        { x: -0.05, y: -1.0, rot: 3, scale: 0.53 },
+        { x: 0.05, y: 1.05, rot: -3, scale: 0.51 }
       ];
 
-      // Бутоны — маленькие, 12 шт, разбросаны по краям
-      const buds = [
-        { x: -0.82, y: 0.45, scale: 0.22 },
-        { x: 0.8, y: 0.5, scale: 0.2 },
-        { x: -0.5, y: 1.05, scale: 0.24 },
-        { x: 0.48, y: -0.95, scale: 0.21 },
+      var buds = [
+        { x: -0.82, y: 0.45, scale: 0.2 },
+        { x: 0.8, y: 0.5, scale: 0.19 },
+        { x: -0.5, y: 1.05, scale: 0.21 },
+        { x: 0.48, y: -0.95, scale: 0.2 },
         { x: -0.78, y: -0.4, scale: 0.18 },
-        { x: 0.82, y: -0.05, scale: 0.23 },
-        { x: -0.15, y: -1.12, scale: 0.2 },
-        { x: 0.25, y: 1.12, scale: 0.22 },
-        { x: -0.88, y: 0.12, scale: 0.18 },
-        { x: 0.85, y: 0.18, scale: 0.21 },
-        { x: -0.42, y: -1.05, scale: 0.19 },
-        { x: 0.42, y: 1.0, scale: 0.2 },
+        { x: 0.82, y: -0.05, scale: 0.22 },
+        { x: -0.15, y: -1.12, scale: 0.19 },
+        { x: 0.25, y: 1.12, scale: 0.21 },
+        { x: -0.88, y: 0.12, scale: 0.17 },
+        { x: 0.85, y: 0.18, scale: 0.2 },
+        { x: -0.42, y: -1.05, scale: 0.18 },
+        { x: 0.42, y: 1.0, scale: 0.19 }
       ];
 
-      const target = document.getElementById('target');
-      const hint = document.getElementById('hint');
-      const scanOverlay = document.getElementById('scan-overlay');
+      var target = document.getElementById('target');
+      var hint = document.getElementById('hint');
+      var scanOverlay = document.getElementById('scan-overlay');
+      var allExtras = [];
 
-      // Создаём элементы динамически
       function createPeony(id, src, x, y, rot, scale) {
-        const el = document.createElement('a-image');
+        var el = document.createElement('a-image');
         el.setAttribute('id', id);
         el.setAttribute('src', src);
         el.setAttribute('material', 'transparent: true; alphaTest: 0.05');
@@ -210,90 +178,67 @@
         el.setAttribute('rotation', '0 ' + rot + ' 0');
         el.setAttribute('scale', '0.001 0.001 1');
         el.setAttribute('opacity', '0');
-        el.setAttribute('animation__grow', 'property: scale; from: 0.001 0.001 1; to: ' + scale + ' ' + scale + ' 1; dur: ' + (1800 + Math.random() * 1200) + '; easing: easeOutCubic; startEvents: bloom');
-        el.setAttribute('animation__fade', 'property: opacity; from: 0; to: 1; dur: ' + (400 + Math.random() * 400) + '; easing: easeOutCubic; startEvents: bloom');
+        var growDur = 1800 + Math.floor(Math.random() * 1200);
+        var fadeDur = 400 + Math.floor(Math.random() * 400);
+        el.setAttribute('animation__grow', 'property: scale; from: 0.001 0.001 1; to: ' + scale + ' ' + scale + ' 1; dur: ' + growDur + '; easing: easeOutCubic; startEvents: bloom');
+        el.setAttribute('animation__fade', 'property: opacity; from: 0; to: 1; dur: ' + fadeDur + '; easing: easeOutCubic; startEvents: bloom');
         target.appendChild(el);
         return el;
       }
 
-      let allExtras = [];
+      halfOpen.forEach(function(p, i) { allExtras.push(createPeony('h' + i, 'peony_half.png', p.x, p.y, p.rot, p.scale)); });
+      opening.forEach(function(p, i) { allExtras.push(createPeony('o' + i, 'peony_open.png', p.x, p.y, p.rot, p.scale)); });
+      buds.forEach(function(p, i) { allExtras.push(createPeony('b' + i, 'peony_bud.png', p.x, p.y, (Math.random() - 0.5) * 20, p.scale)); });
 
-      // Генерируем полураскрытые
-      halfOpen.forEach((p, i) => {
-        const el = createPeony('h' + i, 'peony_half.png', p.x, p.y, p.rot, p.scale);
-        allExtras.push(el);
-      });
-
-      // Генерируем раскрывающиеся
-      opening.forEach((p, i) => {
-        const el = createPeony('o' + i, 'peony_open.png', p.x, p.y, p.rot, p.scale);
-        allExtras.push(el);
-      });
-
-      // Генерируем бутоны
-      buds.forEach((p, i) => {
-        const el = createPeony('b' + i, 'peony_bud.png', p.x, p.y, (Math.random() - 0.5) * 20, p.scale);
-        allExtras.push(el);
-      });
-
-      // Собираем все пионы
-      const mainPeonies = ['p1','p2','p3','p4','p5'];
-      const origPos = {
+      var mainPeonies = ['p1', 'p2', 'p3', 'p4', 'p5'];
+      var origPos = {
         'p1': '0 0 0',
         'p2': '-0.38 0.72 0',
         'p3': '-0.36 -0.65 0',
         'p4': '0.4 0.75 0',
-        'p5': '0.38 -0.7 0',
+        'p5': '0.38 -0.7 0'
       };
 
       function resetAll() {
-        mainPeonies.forEach(id => {
-          const p = document.getElementById(id);
+        mainPeonies.forEach(function(id) {
+          var p = document.getElementById(id);
           p.setAttribute('scale', '0.001 0.001 1');
           p.setAttribute('opacity', '0');
           p.setAttribute('position', origPos[id]);
         });
-        allExtras.forEach(p => {
+        allExtras.forEach(function(p) {
           p.setAttribute('scale', '0.001 0.001 1');
           p.setAttribute('opacity', '0');
         });
       }
 
-      // Перемешиваем массив (Fisher-Yates)
       function shuffle(arr) {
-        for (let i = arr.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [arr[i], arr[j]] = [arr[j], arr[i]];
+        for (var i = arr.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
         }
         return arr;
       }
 
       function bloomAll() {
-        // Собираем все элементы в один массив
-        const allEls = [];
-        mainPeonies.forEach(id => allEls.push(document.getElementById(id)));
-        allExtras.forEach(p => allEls.push(p));
-
-        // Перемешиваем — рандомный порядок появления
-        const shuffled = shuffle([...allEls]);
-
-        // Запускаем с рандомными задержками
-        shuffled.forEach((el, i) => {
-          const delay = i * (200 + Math.random() * 300);
-          setTimeout(() => {
-            el.emit('bloom');
-          }, delay);
+        var allEls = [];
+        mainPeonies.forEach(function(id) { allEls.push(document.getElementById(id)); });
+        allExtras.forEach(function(p) { allEls.push(p); });
+        var shuffled = shuffle(allEls.slice());
+        shuffled.forEach(function(el, i) {
+          var delay = i * (200 + Math.floor(Math.random() * 300));
+          setTimeout(function() { el.emit('bloom'); }, delay);
         });
       }
 
-      target.addEventListener('targetFound', () => {
+      target.addEventListener('targetFound', function() {
         hint.classList.add('hidden');
         scanOverlay.classList.add('hidden');
         resetAll();
         setTimeout(bloomAll, 100);
       });
 
-      target.addEventListener('targetLost', () => {
+      target.addEventListener('targetLost', function() {
         resetAll();
         hint.classList.remove('hidden');
         scanOverlay.classList.remove('hidden');
