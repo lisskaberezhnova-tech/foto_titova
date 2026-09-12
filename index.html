@@ -145,6 +145,10 @@
     </a-scene>
 
     <script>
+      // =====================================================
+      // БАЗОВЫЕ НАСТРОЙКИ
+      // =====================================================
+
       var params = new URLSearchParams(window.location.search);
       var currentCam = params.get('camera') || 'back';
 
@@ -178,7 +182,10 @@
         applyMirror();
       });
 
-      // === Фото ===
+      // =====================================================
+      // ФОТО
+      // =====================================================
+
       var photoBtn = document.getElementById('photo-btn');
       var flashEl = document.getElementById('flash');
 
@@ -212,7 +219,6 @@
               }
             }
 
-            // Видео — фон
             if (videoEl && videoEl.videoWidth > 0) {
               var vw = videoEl.videoWidth;
               var vh = videoEl.videoHeight;
@@ -226,7 +232,6 @@
               });
             }
 
-            // AR поверх
             drawMirror(function() {
               ctx.drawImage(canvas3d, 0, 0, w, h);
             });
@@ -245,64 +250,102 @@
       });
 
       // =====================================================
-      // АСИММЕТРИЧНАЯ АРКА ИЗ ПИОНОВ
-      // Левая сторона — выше и гуще, правая — ниже и легче
+      // ТЕКСТУРА СВЕРКАНИЯ — canvas-generated PNG
       // =====================================================
 
-      // 5 основных открытых пионов — каркас арки
-      var mainConfig = [
-        // Макушка арки, чуть левее центра
-        { id: 'p1', src: 'peony.png',   x: -0.15, y: 1.25,  rot: -3,  scale: 1.0,  dur: 800, fade: 300 },
-        // Левая сторона, верх
-        { id: 'p2', src: 'peony.png',   x: -0.85, y: 1.05,  rot: 8,   scale: 0.72, dur: 700, fade: 280 },
-        // Левая сторона, ниже ( арка спускается)
-        { id: 'p3', src: 'peony.png',   x: -1.15, y: 0.45,  rot: 12,  scale: 0.6,  dur: 650, fade: 260 },
-        // Правая сторона, верх — ниже левой
-        { id: 'p4', src: 'peony.png',   x: 0.55,  y: 0.95,  rot: -8,  scale: 0.65, dur: 600, fade: 240 },
-        // Правая сторона, ниже — арка спускается ниже
-        { id: 'p5', src: 'peony.png',   x: 0.9,   y: 0.35,  rot: -12, scale: 0.52, dur: 550, fade: 220 }
-      ];
+      var sparkleTexture = (function() {
+        var c = document.createElement('canvas');
+        c.width = 128; c.height = 128;
+        var ctx = c.getContext('2d');
 
-      // 6 полураскрытых — заполняют арку
-      var halfOpen = [
-        // Левая ветвь (гуще)
-        { x: -0.5,  y: 1.35, rot: 5,   scale: 0.38 },
-        { x: -1.0,  y: 0.75, rot: 10,  scale: 0.36 },
-        { x: -1.25, y: 0.05, rot: 15,  scale: 0.34 },
-        // Правая ветвь (легче)
-        { x: 0.25,  y: 1.2,  rot: -5,  scale: 0.36 },
-        { x: 0.7,   y: 0.65, rot: -10, scale: 0.34 },
-        { x: 1.0,   y: 0.0,  rot: -15, scale: 0.3 },
-      ];
+        // Мягкое свечение
+        var g1 = ctx.createRadialGradient(64, 64, 0, 64, 64, 55);
+        g1.addColorStop(0, 'rgba(255,255,255,0.95)');
+        g1.addColorStop(0.15, 'rgba(255,250,230,0.6)');
+        g1.addColorStop(0.5, 'rgba(255,240,200,0.08)');
+        g1.addColorStop(1, 'rgba(255,240,200,0)');
+        ctx.fillStyle = g1;
+        ctx.fillRect(0, 0, 128, 128);
 
-      // 6 раскрывающихся — средний размер
-      var opening = [
-        // Левая ветвь
-        { x: -0.35, y: 0.95,  rot: 3,   scale: 0.5 },
-        { x: -0.75, y: 0.5,   rot: 8,   scale: 0.48 },
-        { x: -1.05, y: 0.85,  rot: 6,   scale: 0.46 },
-        // Правая ветвь
-        { x: 0.4,   y: 0.5,   rot: -3,  scale: 0.48 },
-        { x: 0.65,  y: 0.15,  rot: -8,  scale: 0.44 },
-        { x: 0.15,  y: 0.75,  rot: 0,   scale: 0.46 }
-      ];
+        // Четырёхлучевая звезда
+        ctx.save();
+        ctx.translate(64, 64);
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.beginPath();
+        ctx.moveTo(0, -58);
+        ctx.quadraticCurveTo(4, -8, 58, 0);
+        ctx.quadraticCurveTo(4, 8, 0, 58);
+        ctx.quadraticCurveTo(-4, 8, -58, 0);
+        ctx.quadraticCurveTo(-4, -8, 0, -58);
+        ctx.fill();
+        ctx.restore();
 
-      // 12 бутонов — россыпь по арке, самые маленькие
-      var buds = [
-        // Левая ветвь (больше бутонов)
-        { x: -0.7,  y: 1.45, scale: 0.22 },
-        { x: -1.1,  y: 1.2,  scale: 0.2 },
-        { x: -1.3,  y: 0.75, scale: 0.19 },
-        { x: -1.35, y: 0.2,  scale: 0.18 },
-        { x: -0.55, y: 1.1,  scale: 0.21 },
-        { x: -0.95, y: 0.3,  scale: 0.19 },
-        { x: -0.2,  y: 1.5,  scale: 0.2 },
-        // Правая ветвь (меньше бутонов)
-        { x: 0.45,  y: 1.3,  scale: 0.2 },
-        { x: 0.8,   y: 0.85, scale: 0.19 },
-        { x: 1.05,  y: 0.55, scale: 0.18 },
-        { x: 1.1,   y: -0.1, scale: 0.17 },
-        { x: 0.3,   y: 0.95, scale: 0.2 }
+        // Яркий центр
+        var g2 = ctx.createRadialGradient(64, 64, 0, 64, 64, 18);
+        g2.addColorStop(0, 'rgba(255,255,255,1)');
+        g2.addColorStop(0.5, 'rgba(255,255,240,0.5)');
+        g2.addColorStop(1, 'rgba(255,255,240,0)');
+        ctx.fillStyle = g2;
+        ctx.beginPath();
+        ctx.arc(64, 64, 18, 0, Math.PI * 2);
+        ctx.fill();
+
+        return c.toDataURL('image/png');
+      })();
+
+      // =====================================================
+      // АРКА — генерация позиций по асимметричной дуге
+      // =====================================================
+
+      function shuffle(arr) {
+        for (var i = arr.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+        }
+        return arr;
+      }
+
+      // Параметры арки
+      var archLeftX = -1.45;
+      var archRightX = 1.2;
+      var archBottomY = -0.3;
+      var archPeakY = 1.95;
+      var archPeakX = -0.12; // чуть левее центра — асимметрия
+
+      function archY(x) {
+        var normX = (x - archPeakX) / Math.max(Math.abs(archLeftX - archPeakX), Math.abs(archRightX - archPeakX));
+        var h = 1 - normX * normX;
+        var y = archBottomY + (archPeakY - archBottomY) * h;
+        // Левая ветвь — дополнительная высота
+        if (x < archPeakX) {
+          y += Math.abs(x - archPeakX) * 0.15;
+        }
+        return y;
+      }
+
+      // Генерируем позиции вдоль арки
+      var numPositions = 50;
+      var archPositions = [];
+      for (var i = 0; i < numPositions; i++) {
+        var t = i / (numPositions - 1);
+        var x = archLeftX + (archRightX - archLeftX) * t;
+        var y = archY(x);
+        // Случайное смещение для естественности
+        x += (Math.random() - 0.5) * 0.3;
+        y += (Math.random() - 0.5) * 0.25;
+        archPositions.push({ x: x, y: y });
+      }
+      shuffle(archPositions);
+
+      // =====================================================
+      // КОНФИГУРАЦИЯ ПИОНОВ — типы перемешаны
+      // =====================================================
+
+      var peonyTypes = [
+        { src: 'peony.png',       sMin: 0.5,  sMax: 1.05, count: 12, zMin: 0.01, zMax: 0.04 },
+        { src: 'peony_half.png',  sMin: 0.3,  sMax: 0.5,  count: 14, zMin: 0.0,  zMax: 0.02 },
+        { src: 'peony_open.png',  sMin: 0.35, sMax: 0.55, count: 13, zMin: 0.0,  zMax: 0.03 },
+        { src: 'peony_bud.png',   sMin: 0.15, sMax: 0.26, count: 11, zMin: 0.02, zMax: 0.05 }
       ];
 
       var container = document.getElementById('container');
@@ -310,14 +353,18 @@
       var hint = document.getElementById('hint');
       var scanOverlay = document.getElementById('scan-overlay');
       var allPeonies = [];
+      var allPeonyPositions = [];
       var origPos = {};
 
-      function createPeony(id, src, x, y, rot, baseScale, growDur, fadeDur) {
+      var posIdx = 0;
+
+      function createPeony(id, src, x, y, rot, baseScale, zOffset, growDur, fadeDur) {
         var el = document.createElement('a-image');
         el.setAttribute('id', id);
         el.setAttribute('src', src);
-        el.setAttribute('material', 'transparent: true; alphaTest: 0.1');
-        var posStr = x + ' ' + y + ' 0';
+        // alphaTest 0.05 — мягкие края, не режет полупрозрачность
+        el.setAttribute('material', 'transparent: true; alphaTest: 0.05; side: double');
+        var posStr = x + ' ' + y + ' ' + zOffset;
         el.setAttribute('position', posStr);
         el.setAttribute('rotation', '0 ' + rot + ' 0');
         el.setAttribute('scale', '0.001 0.001 1');
@@ -332,109 +379,113 @@
         return el;
       }
 
-      mainConfig.forEach(function(p) {
-        createPeony(p.id, p.src, p.x, p.y, p.rot, p.scale, p.dur, p.fade);
-      });
-      halfOpen.forEach(function(p, i) {
-        createPeony('h' + i, 'peony_half.png', p.x, p.y, p.rot, p.scale, 500 + Math.floor(Math.random() * 200), 200 + Math.floor(Math.random() * 100));
-      });
-      opening.forEach(function(p, i) {
-        createPeony('o' + i, 'peony_open.png', p.x, p.y, p.rot, p.scale, 550 + Math.floor(Math.random() * 200), 220 + Math.floor(Math.random() * 100));
-      });
-      buds.forEach(function(p, i) {
-        var rot = (Math.random() - 0.5) * 20;
-        createPeony('b' + i, 'peony_bud.png', p.x, p.y, rot, p.scale, 400 + Math.floor(Math.random() * 200), 180 + Math.floor(Math.random() * 100));
+      // Создаём пионы — типы перемешаны, позиции случайные
+      peonyTypes.forEach(function(type) {
+        for (var i = 0; i < type.count; i++) {
+          if (posIdx >= archPositions.length) posIdx = 0;
+          var pos = archPositions[posIdx++];
+          var scale = type.sMin + Math.random() * (type.sMax - type.sMin);
+          var rot = (Math.random() - 0.5) * 24;
+          var z = type.zMin + Math.random() * (type.zMax - type.zMin);
+          var growDur = 500 + Math.floor(Math.random() * 300);
+          var fadeDur = 200 + Math.floor(Math.random() * 150);
+          var id = 'peony_' + allPeonies.length;
+          createPeony(id, type.src, pos.x, pos.y, rot, scale, z, growDur, fadeDur);
+          allPeonyPositions.push({ x: pos.x, y: pos.y, z: z });
+        }
       });
 
       // =====================================================
-      // СВЕРКАНИЕ — росинка/роса на пионах
+      // СВЕРКАНИЕ — JS-анимация через синусоиду
       // =====================================================
 
-      // Генерируем sparkle-точку как data-URI (звёздочка с мягким свечением)
-      var sparkleSVG = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">' +
-        '<defs><radialGradient id="g" cx="50%" cy="50%" r="50%">' +
-        '<stop offset="0%" stop-color="#fff" stop-opacity="1"/>' +
-        '<stop offset="20%" stop-color="#fff8e0" stop-opacity="0.9"/>' +
-        '<stop offset="100%" stop-color="#fff8e0" stop-opacity="0"/>' +
-        '</radialGradient></defs>' +
-        '<circle cx="32" cy="32" r="14" fill="url(#g)"/>' +
-        '<path d="M32 6 L34 30 L58 32 L34 34 L32 58 L30 34 L6 32 L30 30 Z" fill="#fff" opacity="0.85"/>' +
-        '</svg>';
-      var sparkleDataURI = 'data:image/svg+xml;base64,' + btoa(sparkleSVG);
-
-      // Позиции сверкающих точек — вдоль арки, возле пионов
-      var sparklePositions = [
-        // Левая ветвь
-        { x: -0.12, y: 1.22 }, { x: -0.3, y: 1.4 }, { x: -0.6, y: 1.15 },
-        { x: -0.88, y: 0.95 }, { x: -1.1, y: 0.6 }, { x: -1.2, y: 0.3 },
-        { x: -0.45, y: 0.85 }, { x: -0.75, y: 0.4 }, { x: -1.0, y: 1.0 },
-        { x: -0.2, y: 1.55 }, { x: -0.55, y: 1.5 },
-        // Правая ветвь
-        { x: 0.5, y: 0.9 }, { x: 0.75, y: 0.55 }, { x: 0.95, y: 0.25 },
-        { x: 0.3, y: 1.15 }, { x: 0.6, y: 0.35 }, { x: 0.2, y: 0.7 },
-        { x: 0.45, y: 1.35 }, { x: 0.85, y: 0.7 }, { x: 1.05, y: 0.1 },
-        // Доп. точки в центре арки
-        { x: 0.0, y: 1.1 }, { x: -0.05, y: 0.8 }, { x: 0.1, y: 1.3 }
-      ];
-
-      var sparkles = [];
-
-      sparklePositions.forEach(function(pos, i) {
-        var el = document.createElement('a-image');
-        el.setAttribute('id', 'spark' + i);
-        el.setAttribute('src', sparkleDataURI);
-        el.setAttribute('material', 'transparent: true; opacity: 0');
-        el.setAttribute('position', pos.x + ' ' + pos.y + ' 0.01');
-        var sparkSize = 0.06 + Math.random() * 0.06;
-        el.setAttribute('scale', sparkSize + ' ' + sparkSize + ' 1');
-
-        // Две фазы мигания: появление + исчезновение
-        var twinkleDur = 800 + Math.floor(Math.random() * 1200);
-        var pauseDur = 600 + Math.floor(Math.random() * 2000);
-
-        el.setAttribute('animation__twinkleIn',
-          'property: material.opacity; from: 0; to: 0.9; dur: ' + twinkleDur + '; easing: easeOutCubic; startEvents: twinkle');
-        el.setAttribute('animation__twinkleOut',
-          'property: material.opacity; from: 0.9; to: 0; dur: ' + twinkleDur + '; delay: ' + twinkleDur + '; easing: easeInCubic; startEvents: twinkle');
-
-        // Лёгкое увеличение при появлении
-        el.setAttribute('animation__pulse',
-          'property: scale; from: ' + (sparkSize * 0.5) + ' ' + (sparkSize * 0.5) + ' 1; to: ' + sparkSize + ' ' + sparkSize + ' 1; dur: ' + twinkleDur + '; easing: easeOutCubic; startEvents: twinkle');
-
-        container.appendChild(el);
-        sparkles.push({ el: el, pauseDur: pauseDur, twinkleDur: twinkleDur });
-      });
-
-      var sparkleTimers = [];
+      var sparkleElements = [];
       var sparkleActive = false;
 
-      function scheduleSparkle(spark, index) {
-        if (!sparkleActive) return;
-        var delay = Math.random() * spark.pauseDur;
-        var timer = setTimeout(function() {
-          if (!sparkleActive) return;
-          spark.el.emit('twinkle');
-          // Следующий цикл
-          scheduleSparkle(spark, index);
-        }, delay);
-        sparkleTimers.push(timer);
-      }
+      // Создаём ~35 сверкающих точек, привязанных к пионам
+      for (var i = 0; i < 35; i++) {
+        var pIdx = Math.floor(Math.random() * allPeonyPositions.length);
+        var pp = allPeonyPositions[pIdx];
+        var sx = pp.x + (Math.random() - 0.5) * 0.18;
+        var sy = pp.y + (Math.random() - 0.5) * 0.18;
+        var sz = (pp.z || 0) + 0.03;
 
-      function startSparkles() {
-        sparkleActive = true;
-        sparkles.forEach(function(spark, i) {
-          scheduleSparkle(spark, i);
+        var el = document.createElement('a-image');
+        el.setAttribute('id', 'spark_' + i);
+        el.setAttribute('src', sparkleTexture);
+        el.setAttribute('material', 'transparent: true; alphaTest: 0; opacity: 0; side: double');
+        el.setAttribute('position', sx + ' ' + sy + ' ' + sz);
+
+        var size = 0.04 + Math.random() * 0.07;
+        el.setAttribute('scale', size + ' ' + size + ' 1');
+        container.appendChild(el);
+
+        sparkleElements.push({
+          el: el,
+          size: size,
+          phaseOffset: Math.random() * Math.PI * 2,
+          speed: 0.8 + Math.random() * 1.8,
+          maxOpacity: 0.5 + Math.random() * 0.4,
+          currentOpacity: 0,
+          currentScale: size
         });
       }
 
-      function stopSparkles() {
-        sparkleActive = false;
-        sparkleTimers.forEach(function(t) { clearTimeout(t); });
-        sparkleTimers = [];
-        sparkles.forEach(function(spark) {
-          spark.el.setAttribute('material', 'opacity', '0');
+      // Ещё несколько более крупных сверкающих точек
+      for (var i = 0; i < 8; i++) {
+        var pIdx = Math.floor(Math.random() * allPeonyPositions.length);
+        var pp = allPeonyPositions[pIdx];
+        var sx = pp.x + (Math.random() - 0.5) * 0.15;
+        var sy = pp.y + (Math.random() - 0.5) * 0.15;
+        var sz = (pp.z || 0) + 0.04;
+
+        var el = document.createElement('a-image');
+        el.setAttribute('id', 'spark_big_' + i);
+        el.setAttribute('src', sparkleTexture);
+        el.setAttribute('material', 'transparent: true; alphaTest: 0; opacity: 0; side: double');
+        el.setAttribute('position', sx + ' ' + sy + ' ' + sz);
+
+        var size = 0.09 + Math.random() * 0.05;
+        el.setAttribute('scale', size + ' ' + size + ' 1');
+        container.appendChild(el);
+
+        sparkleElements.push({
+          el: el,
+          size: size,
+          phaseOffset: Math.random() * Math.PI * 2,
+          speed: 0.5 + Math.random() * 1.0,
+          maxOpacity: 0.4 + Math.random() * 0.35,
+          currentOpacity: 0,
+          currentScale: size
         });
       }
+
+      // Анимация сверкания — синусоида с рандомной фазой и скоростью
+      function sparkleTick(time) {
+        var t = time * 0.001;
+
+        if (sparkleActive) {
+          for (var i = 0; i < sparkleElements.length; i++) {
+            var s = sparkleElements[i];
+            var v = Math.sin(t * s.speed + s.phaseOffset);
+
+            if (v > 0.1) {
+              s.currentOpacity = v * s.maxOpacity;
+              s.currentScale = s.size * (0.4 + 0.6 * v);
+              s.el.setAttribute('opacity', s.currentOpacity.toFixed(3));
+              s.el.setAttribute('scale', s.currentScale.toFixed(4) + ' ' + s.currentScale.toFixed(4) + ' 1');
+            } else {
+              if (s.currentOpacity > 0.01) {
+                s.currentOpacity = 0;
+                s.el.setAttribute('opacity', '0');
+              }
+            }
+          }
+        }
+
+        requestAnimationFrame(sparkleTick);
+      }
+      requestAnimationFrame(sparkleTick);
 
       // =====================================================
       // СБРОС И ПОЯВЛЕНИЕ
@@ -446,15 +497,10 @@
           el.setAttribute('opacity', '0');
           el.setAttribute('position', origPos[el.getAttribute('id')]);
         });
-        stopSparkles();
-      }
-
-      function shuffle(arr) {
-        for (var i = arr.length - 1; i > 0; i--) {
-          var j = Math.floor(Math.random() * (i + 1));
-          var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
-        }
-        return arr;
+        sparkleElements.forEach(function(s) {
+          s.el.setAttribute('opacity', '0');
+        });
+        sparkleActive = false;
       }
 
       function bloomAll() {
@@ -465,8 +511,8 @@
           var delay = Math.floor(i * step + Math.random() * (step * 0.5));
           setTimeout(function() { el.emit('bloom'); }, delay);
         });
-        // Запускаем сверкание через 1.2 сек (после появления пионов)
-        setTimeout(startSparkles, 1200);
+        // Запускаем сверкание после появления пионов
+        setTimeout(function() { sparkleActive = true; }, 1100);
       }
 
       var hideTimer = null;
