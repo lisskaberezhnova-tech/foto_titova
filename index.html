@@ -32,35 +32,68 @@
       canvas { display: block; width: 100% !important; height: 100% !important; }
       a-scene { width: 100vw !important; height: 100vh !important; display: block; margin: 0 auto; }
 
+      /* Подсказка: потоньше, длиннее, в одну строку */
       #hint {
-        position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-        background: rgba(0,0,0,0.6); color: #fff; padding: 10px 18px;
-        border-radius: 24px; font-family: -apple-system, sans-serif;
-        font-size: 14px; z-index: 100; transition: opacity 0.5s;
+        position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+        background: rgba(0,0,0,0.55); color: #fff;
+        padding: 7px 20px;
+        border-radius: 18px;
+        font-family: -apple-system, sans-serif;
+        font-size: 13px; font-weight: 400; line-height: 1;
+        white-space: nowrap;
+        z-index: 100; transition: opacity 0.5s;
         pointer-events: none; text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       }
       #hint.hidden { opacity: 0; }
 
+      /* Кнопка разворота — прозрачная, тень кругляшка */
       #switch-cam {
-        position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-        background: rgba(255,255,255,0.9); border: none;
-        width: 56px; height: 56px; border-radius: 50%;
-        z-index: 100; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-        transition: all 0.2s; display: flex; align-items: center; justify-content: center;
-      }
-      #switch-cam:active { background: #fff; transform: translateX(-50%) scale(0.95); }
-      #switch-cam svg { width: 28px; height: 28px; }
-
-      #mirror-cam {
         position: fixed; bottom: 30px; right: 25px;
-        background: rgba(255,255,255,0.9); border: none;
-        width: 56px; height: 56px; border-radius: 50%;
-        z-index: 100; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-        transition: all 0.2s; display: none; align-items: center; justify-content: center;
+        background: transparent; border: none;
+        width: 50px; height: 50px; border-radius: 50%;
+        z-index: 100; cursor: pointer;
+        box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+        transition: all 0.2s;
+        display: flex; align-items: center; justify-content: center;
       }
-      #mirror-cam:active { background: #fff; transform: scale(0.95); }
-      #mirror-cam svg { width: 28px; height: 28px; }
+      #switch-cam:active { transform: scale(0.92); box-shadow: 0 2px 6px rgba(0,0,0,0.45); }
+      #switch-cam svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
 
+      /* Кнопка отражения — прозрачная, над кнопкой разворота */
+      #mirror-cam {
+        position: fixed; bottom: 92px; right: 25px;
+        background: transparent; border: none;
+        width: 50px; height: 50px; border-radius: 50%;
+        z-index: 100; cursor: pointer;
+        box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+        transition: all 0.2s; display: none;
+        align-items: center; justify-content: center;
+      }
+      #mirror-cam:active { transform: scale(0.92); box-shadow: 0 2px 6px rgba(0,0,0,0.45); }
+      #mirror-cam svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
+
+      /* Кнопка фото — белый круг, центр внизу */
+      #photo-btn {
+        position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+        background: #fff; border: none;
+        width: 64px; height: 64px; border-radius: 50%;
+        z-index: 100; cursor: pointer;
+        box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+        transition: all 0.15s;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #photo-btn:active { transform: translateX(-50%) scale(0.92); }
+
+      /* Вспышка при фото */
+      #flash {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #fff; opacity: 0; z-index: 200; pointer-events: none;
+        transition: opacity 0.25s;
+      }
+      #flash.flash-on { opacity: 0.9; }
+
+      /* Значок "+" для сканирования */
       #scan-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 90; pointer-events: none;
@@ -68,9 +101,9 @@
         transition: opacity 0.4s;
       }
       #scan-overlay.hidden { opacity: 0; }
-      #scan-plus { width: 50px; height: 50px; position: relative; }
+      #scan-plus { width: 48px; height: 48px; position: relative; }
       #scan-plus::before, #scan-plus::after {
-        content: ''; position: absolute; background: rgba(255,255,255,0.5);
+        content: ''; position: absolute; background: rgba(255,255,255,0.6);
       }
       #scan-plus::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
       #scan-plus::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
@@ -79,9 +112,14 @@
   <body>
     <div id="hint">Наведите камеру на метку</div>
     <div id="scan-overlay"><div id="scan-plus"></div></div>
+    <div id="flash"></div>
 
+    <!-- Фото — белый круг, центр внизу -->
+    <button id="photo-btn"></button>
+
+    <!-- Разворот — правый нижний угол, обе камеры -->
     <button id="switch-cam">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24">
         <polyline points="23 4 23 10 17 10"></polyline>
         <polyline points="1 20 1 14 7 14"></polyline>
         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
@@ -89,8 +127,9 @@
       </svg>
     </button>
 
+    <!-- Отражение — над разворотом, только фронтальная -->
     <button id="mirror-cam">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24">
         <path d="M12 3v18"></path>
         <path d="M8 7L4 12l4 5"></path>
         <path d="M16 7l4 5-4 5"></path>
@@ -119,43 +158,81 @@
       var params = new URLSearchParams(window.location.search);
       var currentCam = params.get('camera') || 'back';
 
+      // === Кнопка разворота камеры ===
       var switchBtn = document.getElementById('switch-cam');
       switchBtn.addEventListener('click', function() {
         var newCam = currentCam === 'front' ? 'back' : 'front';
         window.location.href = window.location.pathname + '?camera=' + newCam;
       });
 
-      // === Зеркало: только на фронтальной, крутит только видео, AR не трогает ===
+      // === Кнопка отражения: только фронтальная ===
       var mirrorBtn = document.getElementById('mirror-cam');
       var isMirror = false;
-
       if (currentCam === 'front') {
         mirrorBtn.style.display = 'flex';
       }
-
       mirrorBtn.addEventListener('click', function() {
         isMirror = !isMirror;
-        // Находим canvas внутри a-scene — это и есть видео + AR рендер
-        var canvases = document.querySelectorAll('a-scene canvas, .a-canvas');
         var videoEl = document.querySelector('video');
-        // Зеркалим только video-элемент, не canvas с AR
         if (videoEl) {
           videoEl.style.transform = isMirror ? 'scaleX(-1)' : 'none';
-        }
-        // Если video не найден отдельно, пытаемся через canvas,
-        // но тогда контр-переворачиваем контейнер AR
-        if (!videoEl && canvases.length > 0) {
-          if (isMirror) {
-            canvases[0].style.transform = 'scaleX(-1)';
-            document.getElementById('container').setAttribute('scale', '-1 1 1');
-          } else {
-            canvases[0].style.transform = 'none';
-            document.getElementById('container').setAttribute('scale', '1 1 1');
+        } else {
+          var canvases = document.querySelectorAll('a-scene canvas, .a-canvas');
+          var container = document.getElementById('container');
+          if (canvases.length > 0) {
+            canvases[0].style.transform = isMirror ? 'scaleX(-1)' : 'none';
+            container.setAttribute('scale', isMirror ? '-1 1 1' : '1 1 1');
           }
         }
       });
 
-      // === Конфигурация пионов (одинаковая для обеих камер) ===
+      // === Кнопка фото: снимок canvas + видео ===
+      var photoBtn = document.getElementById('photo-btn');
+      var flashEl = document.getElementById('flash');
+
+      photoBtn.addEventListener('click', function() {
+        // Вспышка
+        flashEl.classList.add('flash-on');
+        setTimeout(function() { flashEl.classList.remove('flash-on'); }, 250);
+
+        // Собираем кадр
+        var sceneEl = document.querySelector('a-scene');
+        var canvas3d = sceneEl.querySelector('canvas') || document.querySelector('.a-canvas');
+        var videoEl = document.querySelector('video');
+
+        var w = window.innerWidth;
+        var h = window.innerHeight;
+        var outCanvas = document.createElement('canvas');
+        outCanvas.width = w;
+        outCanvas.height = h;
+        var ctx = outCanvas.getContext('2d');
+
+        // Сначала видео
+        if (videoEl && videoEl.videoWidth > 0) {
+          if (isMirror) {
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.drawImage(videoEl, -w, 0, w, h);
+            ctx.restore();
+          } else {
+            ctx.drawImage(videoEl, 0, 0, w, h);
+          }
+        }
+
+        // Потом AR поверх
+        if (canvas3d) {
+          ctx.drawImage(canvas3d, 0, 0, w, h);
+        }
+
+        // Скачивание
+        var dataURL = outCanvas.toDataURL('image/png');
+        var link = document.createElement('a');
+        link.download = 'ar-photo-' + Date.now() + '.png';
+        link.href = dataURL;
+        link.click();
+      });
+
+      // === Конфигурация пионов ===
       var mainConfig = [
         { id: 'p1', src: 'peony.png', x: 0, y: 0, rot: 0, scale: 1.05, dur: 3200, fade: 800 },
         { id: 'p2', src: 'peony.png', x: -0.38, y: 0.72, rot: 5, scale: 0.65, dur: 2600, fade: 700 },
@@ -204,7 +281,6 @@
       var allPeonies = [];
       var origPos = {};
 
-      // Каждый пион получает свой масштаб напрямую, всегда S S 1 — пропорции не ломаются
       function createPeony(id, src, x, y, rot, baseScale, growDur, fadeDur) {
         var el = document.createElement('a-image');
         el.setAttribute('id', id);
@@ -215,7 +291,6 @@
         el.setAttribute('rotation', '0 ' + rot + ' 0');
         el.setAttribute('scale', '0.001 0.001 1');
         el.setAttribute('opacity', '0');
-        // from и to всегда S S 1 — пропорции сохраняются
         el.setAttribute('animation__grow',
           'property: scale; from: 0.001 0.001 1; to: ' + baseScale + ' ' + baseScale + ' 1; dur: ' + growDur + '; easing: easeOutCubic; startEvents: bloom');
         el.setAttribute('animation__fade',
@@ -229,19 +304,16 @@
       mainConfig.forEach(function(p) {
         createPeony(p.id, p.src, p.x, p.y, p.rot, p.scale, p.dur, p.fade);
       });
-
       halfOpen.forEach(function(p, i) {
         var growDur = 1800 + Math.floor(Math.random() * 1200);
         var fadeDur = 400 + Math.floor(Math.random() * 400);
         createPeony('h' + i, 'peony_half.png', p.x, p.y, p.rot, p.scale, growDur, fadeDur);
       });
-
       opening.forEach(function(p, i) {
         var growDur = 1800 + Math.floor(Math.random() * 1200);
         var fadeDur = 400 + Math.floor(Math.random() * 400);
         createPeony('o' + i, 'peony_open.png', p.x, p.y, p.rot, p.scale, growDur, fadeDur);
       });
-
       buds.forEach(function(p, i) {
         var growDur = 1800 + Math.floor(Math.random() * 1200);
         var fadeDur = 400 + Math.floor(Math.random() * 400);
