@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>AR Photo Zone — Пионы на мху</title>
+    <title>AR Photo Zone — Пионы</title>
 
     <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-    <!-- Перехватываем getUserMedia: выбираем камеру из URL -->
+    <!-- Выбор камеры через URL -->
     <script>
       (function() {
         const params = new URLSearchParams(window.location.search);
@@ -33,28 +33,36 @@
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
 
+      /* Подсказка — теперь наверху и без «на мху» */
       #hint {
-        position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
-        background: rgba(0,0,0,0.6); color: #fff; padding: 12px 24px;
-        border-radius: 30px; font-family: -apple-system, sans-serif;
+        position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+        background: rgba(0,0,0,0.6); color: #fff; padding: 10px 18px;
+        border-radius: 24px; font-family: -apple-system, sans-serif;
         font-size: 14px; z-index: 100; transition: opacity 0.5s;
         pointer-events: none; text-align: center;
       }
       #hint.hidden { opacity: 0; }
 
+      /* Круглая кнопка переключения камеры — внизу по центру */
       #switch-cam {
         position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
         background: rgba(255,255,255,0.9); color: #333; border: none;
-        padding: 14px 28px; border-radius: 30px; font-family: -apple-system, sans-serif;
-        font-size: 15px; font-weight: 600; z-index: 100; cursor: pointer;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.3); transition: background 0.2s;
+        width: 64px; height: 64px; border-radius: 50%;
+        font-family: -apple-system, sans-serif; font-size: 15px; font-weight: 600;
+        z-index: 100; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+        transition: all 0.2s;
       }
-      #switch-cam:active { background: rgba(255,255,255,1); }
+      #switch-cam:active {
+        background: #fff; transform: translateX(-50%) scale(0.95);
+      }
     </style>
   </head>
   <body>
-    <div id="hint">Наведите камеру на метку на мху</div>
-    <button id="switch-cam">Переключить камеру</button>
+    <!-- Подсказка: теперь просто «Наведите камеру на метку» -->
+    <div id="hint">Наведите камеру на метку</div>
+
+    <!-- Кнопка переключения камеры: круглая, без эмодзи -->
+    <button id="switch-cam"></button>
 
     <a-scene
       mindar-image="imageTargetSrc: targets.mind; filterMinCF: 0.0001; filterBeta: 1000; warmupTolerance: 3; missTolerance: 8;"
@@ -106,24 +114,22 @@
           animation__fade="property: opacity; from: 0; to: 1; dur: 350; startEvents: bloom"
           animation__sway="property: rotation; from: 0 -12 0; to: 0 -6 0; dur: 6500; dir: alternate; loop: true; easing: easeInOutSine; startEvents: sway">
         </a-image>
-
       </a-entity>
     </a-scene>
 
     <script>
-      // Кнопка переключения камеры
       const switchBtn = document.getElementById('switch-cam');
       const params = new URLSearchParams(window.location.search);
       const currentCam = params.get('camera') || 'back';
 
-      switchBtn.textContent = currentCam === 'front' ? '📷 Обычная камера' : '🤳 Селфи-камера';
+      // Текст кнопки без эмодзи
+      switchBtn.textContent = currentCam === 'front' ? 'Обычная камера' : 'Селфи-камера';
 
       switchBtn.addEventListener('click', () => {
         const newCam = currentCam === 'front' ? 'back' : 'front';
         window.location.href = window.location.pathname + '?camera=' + newCam;
       });
 
-      // Анимация пионов
       const target = document.querySelector('a-entity[mindar-image-target]');
       const hint = document.getElementById('hint');
       const peonies = ['peony1', 'peony2', 'peony3', 'peony4', 'peony5'];
