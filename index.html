@@ -8,7 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-    <!-- Выбор камеры через URL -->
     <script>
       (function() {
         const params = new URLSearchParams(window.location.search);
@@ -30,10 +29,10 @@
     </script>
 
     <style>
-      body { margin: 0; overflow: hidden; }
-      canvas { display: block; }
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+      canvas { display: block; width: 100% !important; height: 100% !important; }
+      a-scene { width: 100vw !important; height: 100vh !important; }
 
-      /* Подсказка — теперь наверху и без «на мху» */
       #hint {
         position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
         background: rgba(0,0,0,0.6); color: #fff; padding: 10px 18px;
@@ -43,7 +42,6 @@
       }
       #hint.hidden { opacity: 0; }
 
-      /* Круглая кнопка переключения камеры — внизу по центру */
       #switch-cam {
         position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
         background: rgba(255,255,255,0.9); color: #333; border: none;
@@ -58,10 +56,7 @@
     </style>
   </head>
   <body>
-    <!-- Подсказка: теперь просто «Наведите камеру на метку» -->
     <div id="hint">Наведите камеру на метку</div>
-
-    <!-- Кнопка переключения камеры: круглая, без эмодзи -->
     <button id="switch-cam"></button>
 
     <a-scene
@@ -69,8 +64,7 @@
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
       color-space="sRGB"
-      renderer="colorManagement: true, physicallyCorrectLights"
-      embedded>
+      renderer="colorManagement: true, physicallyCorrectLights">
 
       <a-light type="ambient" intensity="0.7" color="#fff5f0"></a-light>
       <a-light type="directional" position="0 1 2" intensity="0.6" color="#ffffff"></a-light>
@@ -122,8 +116,7 @@
       const params = new URLSearchParams(window.location.search);
       const currentCam = params.get('camera') || 'back';
 
-      // Текст кнопки без эмодзи
-      switchBtn.textContent = currentCam === 'front' ? 'Обычная камера' : 'Селфи-камера';
+      switchBtn.textContent = currentCam === 'front' ? 'Обычная' : 'Селфи';
 
       switchBtn.addEventListener('click', () => {
         const newCam = currentCam === 'front' ? 'back' : 'front';
