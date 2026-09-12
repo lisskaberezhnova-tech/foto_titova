@@ -119,21 +119,14 @@
       var params = new URLSearchParams(window.location.search);
       var currentCam = params.get('camera') || 'back';
 
-      // Кнопка переключения камеры
       var switchBtn = document.getElementById('switch-cam');
       switchBtn.addEventListener('click', function() {
         var newCam = currentCam === 'front' ? 'back' : 'front';
         window.location.href = window.location.pathname + '?camera=' + newCam;
       });
 
-      // === Параметры для фронтальной камеры ===
-      var camMult = currentCam === 'front' ? 0.6 : 1.0;
-      var camYShift = currentCam === 'front' ? 0.3 : 0;
-
-      // === Кнопка зеркала: только на фронтальной ===
+      // === Зеркало: только на фронтальной, крутит только видео, AR не трогает ===
       var mirrorBtn = document.getElementById('mirror-cam');
-      var sceneEl = document.querySelector('a-scene');
-      var container = document.getElementById('container');
       var isMirror = false;
 
       if (currentCam === 'front') {
@@ -142,20 +135,27 @@
 
       mirrorBtn.addEventListener('click', function() {
         isMirror = !isMirror;
-        if (isMirror) {
-          // Зеркалим canvas (видео + AR)
-          sceneEl.style.transform = 'scaleX(-1)';
-          sceneEl.style.transformOrigin = '50% 50%';
-          // Контр-переворот AR-контента: пионы остаются правильными
-          container.setAttribute('scale', '-1 1 1');
-        } else {
-          sceneEl.style.transform = 'none';
-          container.setAttribute('scale', '1 1 1');
+        // Находим canvas внутри a-scene — это и есть видео + AR рендер
+        var canvases = document.querySelectorAll('a-scene canvas, .a-canvas');
+        var videoEl = document.querySelector('video');
+        // Зеркалим только video-элемент, не canvas с AR
+        if (videoEl) {
+          videoEl.style.transform = isMirror ? 'scaleX(-1)' : 'none';
+        }
+        // Если video не найден отдельно, пытаемся через canvas,
+        // но тогда контр-переворачиваем контейнер AR
+        if (!videoEl && canvases.length > 0) {
+          if (isMirror) {
+            canvases[0].style.transform = 'scaleX(-1)';
+            document.getElementById('container').setAttribute('scale', '-1 1 1');
+          } else {
+            canvases[0].style.transform = 'none';
+            document.getElementById('container').setAttribute('scale', '1 1 1');
+          }
         }
       });
 
-      // === Конфигурация всех пионов ===
-      // 5 открытых (крупные)
+      // === Конфигурация пионов (одинаковая для обеих камер) ===
       var mainConfig = [
         { id: 'p1', src: 'peony.png', x: 0, y: 0, rot: 0, scale: 1.05, dur: 3200, fade: 800 },
         { id: 'p2', src: 'peony.png', x: -0.38, y: 0.72, rot: 5, scale: 0.65, dur: 2600, fade: 700 },
@@ -164,7 +164,6 @@
         { id: 'p5', src: 'peony.png', x: 0.38, y: -0.7, rot: -5, scale: 0.55, dur: 2000, fade: 550 }
       ];
 
-      // 6 полураскрытых (меньше)
       var halfOpen = [
         { x: -0.62, y: 0.3, rot: 10, scale: 0.34 },
         { x: 0.6, y: -0.3, rot: -8, scale: 0.32 },
@@ -174,7 +173,6 @@
         { x: -0.68, y: -0.15, rot: 8, scale: 0.32 }
       ];
 
-      // 6 раскрывающихся (крупнее полураскрытых)
       var opening = [
         { x: 0.55, y: 0.28, rot: -5, scale: 0.52 },
         { x: -0.52, y: -0.28, rot: 8, scale: 0.5 },
@@ -184,7 +182,6 @@
         { x: 0.05, y: 1.05, rot: -3, scale: 0.51 }
       ];
 
-      // 12 бутонов (самые маленькие)
       var buds = [
         { x: -0.82, y: 0.45, scale: 0.2 },
         { x: 0.8, y: 0.5, scale: 0.19 },
@@ -200,30 +197,27 @@
         { x: 0.42, y: 1.0, scale: 0.19 }
       ];
 
+      var container = document.getElementById('container');
       var target = document.getElementById('target');
       var hint = document.getElementById('hint');
       var scanOverlay = document.getElementById('scan-overlay');
       var allPeonies = [];
       var origPos = {};
 
-      // Создание пиона: масштаб применяется напрямую, без родительского scale
+      // Каждый пион получает свой масштаб напрямую, всегда S S 1 — пропорции не ломаются
       function createPeony(id, src, x, y, rot, baseScale, growDur, fadeDur) {
         var el = document.createElement('a-image');
         el.setAttribute('id', id);
         el.setAttribute('src', src);
         el.setAttribute('material', 'transparent: true; alphaTest: 0.05');
-        // Итоговый масштаб: baseScale * camMult (одинаково по X и Y)
-        var finalScale = baseScale * camMult;
-        // Позиция: Y сдвигается вверх на фронтальной камере
-        var finalY = y + camYShift;
-        var posStr = x + ' ' + finalY + ' 0';
+        var posStr = x + ' ' + y + ' 0';
         el.setAttribute('position', posStr);
         el.setAttribute('rotation', '0 ' + rot + ' 0');
         el.setAttribute('scale', '0.001 0.001 1');
         el.setAttribute('opacity', '0');
-        // Анимация: from и to всегда пропорциональны (S S 1)
+        // from и to всегда S S 1 — пропорции сохраняются
         el.setAttribute('animation__grow',
-          'property: scale; from: 0.001 0.001 1; to: ' + finalScale + ' ' + finalScale + ' 1; dur: ' + growDur + '; easing: easeOutCubic; startEvents: bloom');
+          'property: scale; from: 0.001 0.001 1; to: ' + baseScale + ' ' + baseScale + ' 1; dur: ' + growDur + '; easing: easeOutCubic; startEvents: bloom');
         el.setAttribute('animation__fade',
           'property: opacity; from: 0; to: 1; dur: ' + fadeDur + '; easing: easeOutCubic; startEvents: bloom');
         container.appendChild(el);
@@ -232,26 +226,22 @@
         return el;
       }
 
-      // Создаём 5 открытых
       mainConfig.forEach(function(p) {
         createPeony(p.id, p.src, p.x, p.y, p.rot, p.scale, p.dur, p.fade);
       });
 
-      // Создаём 6 полураскрытых
       halfOpen.forEach(function(p, i) {
         var growDur = 1800 + Math.floor(Math.random() * 1200);
         var fadeDur = 400 + Math.floor(Math.random() * 400);
         createPeony('h' + i, 'peony_half.png', p.x, p.y, p.rot, p.scale, growDur, fadeDur);
       });
 
-      // Создаём 6 раскрывающихся
       opening.forEach(function(p, i) {
         var growDur = 1800 + Math.floor(Math.random() * 1200);
         var fadeDur = 400 + Math.floor(Math.random() * 400);
         createPeony('o' + i, 'peony_open.png', p.x, p.y, p.rot, p.scale, growDur, fadeDur);
       });
 
-      // Создаём 12 бутонов
       buds.forEach(function(p, i) {
         var growDur = 1800 + Math.floor(Math.random() * 1200);
         var fadeDur = 400 + Math.floor(Math.random() * 400);
@@ -259,7 +249,6 @@
         createPeony('b' + i, 'peony_bud.png', p.x, p.y, rot, p.scale, growDur, fadeDur);
       });
 
-      // === Сброс всех пионов ===
       function resetAll() {
         allPeonies.forEach(function(el) {
           el.setAttribute('scale', '0.001 0.001 1');
@@ -268,7 +257,6 @@
         });
       }
 
-      // === Перемешивание (Fisher-Yates) ===
       function shuffle(arr) {
         for (var i = arr.length - 1; i > 0; i--) {
           var j = Math.floor(Math.random() * (i + 1));
@@ -277,7 +265,6 @@
         return arr;
       }
 
-      // === Запуск появления с рандомным порядком ===
       function bloomAll() {
         var shuffled = shuffle(allPeonies.slice());
         shuffled.forEach(function(el, i) {
@@ -286,7 +273,6 @@
         });
       }
 
-      // === Обработчики с дебаунсом ===
       var hideTimer = null;
       var showTimer = null;
 
