@@ -7,6 +7,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
 
     <script>
       (function() {
@@ -100,6 +101,14 @@
       }
       #scan-plus::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
       #scan-plus::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
+
+      /* Слой occlusion — поверх a-scene, под UI */
+      #occlusion-overlay {
+        position: fixed; top: 0; left: 0;
+        width: 100% !important; height: 100% !important;
+        z-index: 5; pointer-events: none;
+        transform-origin: 50% 50%;
+      }
     </style>
   </head>
   <body>
@@ -126,7 +135,6 @@
       </svg>
     </button>
 
-    <!-- preserveDrawingBuffer: true — критично для захвата AR в фото -->
     <a-scene
       mindar-image="imageTargetSrc: targets.mind; filterMinCF: 0.001; filterBeta: 0.01; warmupTolerance: 5; missTolerance: 10; uiScanning: no; uiLoading: no; uiError: no;"
       vr-mode-ui="enabled: false"
@@ -149,19 +157,21 @@
       var params = new URLSearchParams(window.location.search);
       var currentCam = params.get('camera') || 'back';
 
+      // === Кнопка разворота камеры ===
       var switchBtn = document.getElementById('switch-cam');
       switchBtn.addEventListener('click', function() {
         var newCam = currentCam === 'front' ? 'back' : 'front';
         window.location.href = window.location.pathname + '?camera=' + newCam;
       });
 
+      // === Кнопка отражения ===
       var mirrorBtn = document.getElementById('mirror-cam');
       var isMirror = false;
       if (currentCam === 'front') {
         mirrorBtn.style.display = 'flex';
       }
-      mirrorBtn.addEventListener('click', function() {
-        isMirror = !isMirror;
+
+      function applyMirror() {
         var videoEl = document.querySelector('video');
         if (videoEl) {
           videoEl.style.transform = isMirror ? 'scaleX(-1)' : 'none';
@@ -173,9 +183,133 @@
             container.setAttribute('scale', isMirror ? '-1 1 1' : '1 1 1');
           }
         }
+        var overlay = document.getElementById('occlusion-overlay');
+        if (overlay) {
+          overlay.style.transform = isMirror ? 'scaleX(-1)' : 'none';
+        }
+      }
+
+      mirrorBtn.addEventListener('click', function() {
+        isMirror = !isMirror;
+        applyMirror();
       });
 
-      // === Кнопка фото: снимок с AR ===
+      // === Occlusion: сегментация людей через MediaPipe ===
+      var occlusionEnabled = false;
+      var selfieSegmentation = null;
+      var overlayCanvas = null;
+      var overlayCtx = null;
+      var personCanvas = null;
+      var personCtx = null;
+      var processingFrame = false;
+
+      function initOcclusion() {
+        if (typeof SelfieSegmentation === 'undefined') {
+          console.warn('SelfieSegmentation не загружен, occlusion отключён');
+          return;
+        }
+
+        overlayCanvas = document.createElement('canvas');
+        overlayCanvas.id = 'occlusion-overlay';
+        overlayCanvas.style.position = 'fixed';
+        overlayCanvas.style.top = '0';
+        overlayCanvas.style.left = '0';
+        overlayCanvas.style.width = '100%';
+        overlayCanvas.style.height = '100%';
+        overlayCanvas.style.zIndex = '5';
+        overlayCanvas.style.pointerEvents = 'none';
+        overlayCanvas.style.transformOrigin = '50% 50%';
+        document.body.appendChild(overlayCanvas);
+        overlayCtx = overlayCanvas.getContext('2d');
+
+        personCanvas = document.createElement('canvas');
+        personCtx = personCanvas.getContext('2d');
+
+        selfieSegmentation = new SelfieSegmentation({
+          locateFile: function(file) {
+            return 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/' + file;
+          }
+        });
+        selfieSegmentation.setOptions({ modelSelection: 1, selfieMode: false });
+        selfieSegmentation.onResults(onSegmentationResults);
+
+        occlusionEnabled = true;
+        occlusionLoop();
+      }
+
+      function onSegmentationResults(results) {
+        processingFrame = false;
+
+        var videoEl = document.querySelector('video');
+        var arCanvas = document.querySelector('a-scene canvas') || document.querySelector('.a-canvas');
+        if (!videoEl || videoEl.videoWidth === 0 || !arCanvas) return;
+
+        // Размеры = как у AR-canvas (реальное разрешение рендера)
+        var cw = arCanvas.width;
+        var ch = arCanvas.height;
+
+        if (overlayCanvas.width !== cw) overlayCanvas.width = cw;
+        if (overlayCanvas.height !== ch) overlayCanvas.height = ch;
+        if (personCanvas.width !== cw) personCanvas.width = cw;
+        if (personCanvas.height !== ch) personCanvas.height = ch;
+
+        var vw = videoEl.videoWidth;
+        var vh = videoEl.videoHeight;
+
+        // Cover-масштабирование: как видео отображается в AR-canvas
+        var scale = Math.max(cw / vw, ch / vh);
+        var dw = vw * scale;
+        var dh = vh * scale;
+        var dx = (cw - dw) / 2;
+        var dy = (ch - dh) / 2;
+
+        // 1. Очищаем
+        personCtx.clearRect(0, 0, cw, ch);
+
+        // 2. Рисуем кадр видео (cover)
+        personCtx.drawImage(results.image, dx, dy, dw, dh);
+
+        // 3. Оставляем только пиксели человека (через маску)
+        personCtx.globalCompositeOperation = 'destination-in';
+
+        // Лёгкое размытие маски для мягких краёв
+        personCtx.filter = 'blur(1.5px)';
+        personCtx.drawImage(results.segmentationMask, dx, dy, dw, dh);
+        personCtx.filter = 'none';
+
+        personCtx.globalCompositeOperation = 'source-over';
+
+        // 4. Копируем в overlay
+        overlayCtx.clearRect(0, 0, cw, ch);
+        overlayCtx.drawImage(personCanvas, 0, 0);
+      }
+
+      function occlusionLoop() {
+        if (!occlusionEnabled) return;
+        var videoEl = document.querySelector('video');
+        if (videoEl && videoEl.videoWidth > 0 && selfieSegmentation && !processingFrame) {
+          processingFrame = true;
+          selfieSegmentation.send({ image: videoEl });
+        }
+        requestAnimationFrame(occlusionLoop);
+      }
+
+      // Инициализация occlusion после загрузки сцены
+      var sceneEl = document.querySelector('a-scene');
+      function tryInitOcclusion() {
+        var arCanvas = document.querySelector('a-scene canvas');
+        var videoEl = document.querySelector('video');
+        if (arCanvas && videoEl && videoEl.videoWidth > 0) {
+          initOcclusion();
+        } else {
+          setTimeout(tryInitOcclusion, 300);
+        }
+      }
+      sceneEl.addEventListener('loaded', function() {
+        setTimeout(tryInitOcclusion, 500);
+      });
+
+      // === Кнопка фото: видео + AR + человек поверх ===
       var photoBtn = document.getElementById('photo-btn');
       var flashEl = document.getElementById('flash');
 
@@ -183,14 +317,12 @@
         flashEl.classList.add('flash-on');
         setTimeout(function() { flashEl.classList.remove('flash-on'); }, 250);
 
-        // Ждём 1 кадр, чтобы буфер WebGL был свежим
         requestAnimationFrame(function() {
           requestAnimationFrame(function() {
             var sceneEl = document.querySelector('a-scene');
             var canvas3d = sceneEl.querySelector('canvas') || document.querySelector('.a-canvas');
             var videoEl = document.querySelector('video');
 
-            // Размеры из canvas (реальное разрешение рендера)
             var w = canvas3d ? canvas3d.width : window.innerWidth;
             var h = canvas3d ? canvas3d.height : window.innerHeight;
 
@@ -199,9 +331,8 @@
             outCanvas.height = h;
             var ctx = outCanvas.getContext('2d');
 
-            // 1) Видео — фон
+            // 1. Видео — фон (cover-масштабирование)
             if (videoEl && videoEl.videoWidth > 0) {
-              // Cover-масштабирование видео под размер canvas
               var vw = videoEl.videoWidth;
               var vh = videoEl.videoHeight;
               var scale = Math.max(w / vw, h / vh);
@@ -221,12 +352,24 @@
               }
             }
 
-            // 2) AR canvas поверх
+            // 2. AR-canvas поверх видео
             if (canvas3d) {
               ctx.drawImage(canvas3d, 0, 0, w, h);
             }
 
-            // Скачивание
+            // 3. Слой человека поверх AR (occlusion)
+            if (personCanvas && personCanvas.width > 0) {
+              if (isMirror) {
+                ctx.save();
+                ctx.translate(w, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(personCanvas, 0, 0, w, h);
+                ctx.restore();
+              } else {
+                ctx.drawImage(personCanvas, 0, 0, w, h);
+              }
+            }
+
             try {
               var dataURL = outCanvas.toDataURL('image/png');
               var link = document.createElement('a');
@@ -240,7 +383,7 @@
         });
       });
 
-      // === Конфигурация пионов ===
+      // === Конфигурация пионов (появление за 1 секунду) ===
       var mainConfig = [
         { id: 'p1', src: 'peony.png', x: 0, y: 0, rot: 0, scale: 1.05, dur: 800, fade: 300 },
         { id: 'p2', src: 'peony.png', x: -0.38, y: 0.72, rot: 5, scale: 0.65, dur: 700, fade: 280 },
@@ -341,7 +484,6 @@
 
       function bloomAll() {
         var shuffled = shuffle(allPeonies.slice());
-        // Все 29 пионов за 1 секунду: шаг ~30мс + лёгкий рандом
         var totalMs = 1000;
         var step = totalMs / shuffled.length;
         shuffled.forEach(function(el, i) {
