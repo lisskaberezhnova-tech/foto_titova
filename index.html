@@ -154,6 +154,16 @@
       var params = new URLSearchParams(window.location.search);
       var currentCam = params.get('camera') || 'back';
 
+      // === Отладка: проверка загрузки картинки ===
+      var testImg = new Image();
+      testImg.onload = function() {
+        console.log('[AR] arch_peonies.png загружена: ' + testImg.width + 'x' + testImg.height);
+      };
+      testImg.onerror = function() {
+        console.error('[AR] ОШИБКА: arch_peonies.png НЕ найдена! Проверь имя файла и папку.');
+      };
+      testImg.src = 'arch_peonies.png';
+
       // === Кнопка разворота камеры ===
       var switchBtn = document.getElementById('switch-cam');
       switchBtn.addEventListener('click', function() {
@@ -249,7 +259,7 @@
       });
 
       // =====================================================
-      // ДИНАМИЧЕСКИЙ РАЗМЕР АРКИ — с защитой от ошибок
+      // ДИНАМИЧЕСКИЙ РАЗМЕР АРКИ
       // =====================================================
 
       var archEl = document.getElementById('arch');
@@ -260,24 +270,28 @@
       var BASE_SCALE = 2.0;
       var ARCH_BASE_Y = 0.6;
       var targetFound = false;
+      var firstTickDone = false;
 
       function tick() {
-        if (targetFound && archEl && archEl.object3D && typeof THREE !== 'undefined') {
+        if (targetFound && archEl && archEl.object3D) {
           try {
-            // Мировые координаты арки
-            var archWorld = new THREE.Vector3();
-            archEl.object3D.getWorldPosition(archWorld);
+            // Получаем матрицу цели — в ней зашифровано расстояние
+            var targetMatrix = targetEl.object3D.matrix;
+            var targetScale = targetEl.object3D.scale;
 
-            // Камера в A-Frame всегда в (0,0,0)
-            var dx = 0 - archWorld.x;
-            var dy = 0 - archWorld.y;
-            var dz = 0 - archWorld.z;
-            var distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            // Distance через Z-компонент позиции цели (MindAR ставит цель по Z)
+            var targetPos = targetEl.object3D.position;
+            var distance = Math.abs(targetPos.z);
 
-            // Если координаты ещё не готовы — пропускаем, арка остаётся с базовыми значениями
-            if (isNaN(distance) || distance < 0.01) {
+            // Если координаты ещё не готовы — пропускаем
+            if (!isFinite(distance) || distance < 0.01) {
               requestAnimationFrame(tick);
               return;
+            }
+
+            if (!firstTickDone) {
+              firstTickDone = true;
+              console.log('[AR] Метка найдена! Distance: ' + distance.toFixed(3));
             }
 
             // Масштабируем пропорционально расстоянию
@@ -286,15 +300,15 @@
 
             // Ограничения
             if (newScale < BASE_SCALE * 0.5) newScale = BASE_SCALE * 0.5;
-            if (newScale > BASE_SCALE * 4) newScale = BASE_SCALE * 4;
+            if (newScale > BASE_SCALE * 5) newScale = BASE_SCALE * 5;
 
             var xSign = isMirror ? -1 : 1;
-            archEl.setAttribute('scale', (xSign * newScale) + ' ' + newScale + ' 1');
+            archEl.setAttribute('scale', (xSign * newScale).toFixed(3) + ' ' + newScale.toFixed(3) + ' 1');
 
             var yOffset = ARCH_BASE_Y * scaleFactor;
-            archEl.setAttribute('position', '0 ' + yOffset + ' 0');
+            archEl.setAttribute('position', '0 ' + yOffset.toFixed(3) + ' 0');
           } catch(e) {
-            // При ошибке — не трогаем арку, она остаётся с базовыми значениями
+            // Тихо пропускаем — арка остаётся с базовыми значениями
           }
         }
         requestAnimationFrame(tick);
@@ -307,6 +321,7 @@
 
       targetEl.addEventListener('targetFound', function() {
         targetFound = true;
+        console.log('[AR] targetFound событие получено');
         if (showTimer) { clearTimeout(showTimer); showTimer = null; }
         if (!hideTimer) {
           hideTimer = setTimeout(function() {
@@ -319,6 +334,8 @@
 
       targetEl.addEventListener('targetLost', function() {
         targetFound = false;
+        firstTickDone = false;
+        console.log('[AR] targetLost событие получено');
         if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
         if (!showTimer) {
           showTimer = setTimeout(function() {
