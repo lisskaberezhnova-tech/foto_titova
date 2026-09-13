@@ -38,10 +38,10 @@
         padding: 7px 20px; border-radius: 18px;
         font-family: -apple-system, sans-serif;
         font-size: 13px; font-weight: 400; line-height: 1;
-        white-space: nowrap; z-index: 100;
+        white-space: nowrap;
+        z-index: 100; transition: opacity 0.5s;
         pointer-events: none; text-align: center;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        transition: opacity 0.4s;
       }
       #hint.hidden { opacity: 0; }
 
@@ -174,15 +174,8 @@
           videoEl.style.transform = isMirror ? 'scaleX(-1)' : 'none';
         }
         var canvases = document.querySelectorAll('a-scene canvas, .a-canvas');
-        var container = document.getElementById('target');
         if (canvases.length > 0) {
           canvases[0].style.transform = isMirror ? 'scaleX(-1)' : 'none';
-          if (container) {
-            var arch = document.getElementById('arch');
-            if (arch) {
-              arch.setAttribute('scale', isMirror ? '-2 2 1' : '2 2 1');
-            }
-          }
         }
       }
 
@@ -256,7 +249,7 @@
       });
 
       // =====================================================
-      // ФИКСИРОВАННЫЙ РАЗМЕР АРКИ — не уменьшается при отводе камеры
+      // ФИКСИРОВАННЫЙ РАЗМЕР АРКИ
       // =====================================================
 
       var archEl = document.getElementById('arch');
@@ -265,45 +258,32 @@
       var hintEl = document.getElementById('hint');
       var scanOverlayEl = document.getElementById('scan-overlay');
 
-      // Базовое расстояние и масштаб (калибровка)
-      var BASE_DISTANCE = 1.0;   // расстояние, на котором scale = BASE_SCALE
-      var BASE_SCALE = 2.0;       // базовый масштаб арки
-
-      // Базовая позиция арки над меткой
+      var BASE_DISTANCE = 1.0;
+      var BASE_SCALE = 2.0;
       var ARCH_BASE_Y = 0.6;
 
       var targetFound = false;
 
       function tick() {
         if (targetFound && archEl && cameraEl && cameraEl.object3D) {
-          // Позиции в мировых координатах
           var camPos = cameraEl.object3D.position;
-          var archPos = archEl.object3D.position;
           var archWorld = new THREE.Vector3();
           archEl.object3D.getWorldPosition(archWorld);
 
-          // Расстояние от камеры до арки
           var dx = camPos.x - archWorld.x;
           var dy = camPos.y - archWorld.y;
           var dz = camPos.z - archWorld.z;
           var distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-          // Масштабируем пропорционально расстоянию
-          // Чем дальше — тем больше scale, видимый размер остаётся постоянным
           var scaleFactor = distance / BASE_DISTANCE;
           var newScale = BASE_SCALE * scaleFactor;
 
-          // Ограничиваем, чтобы не было слишком резко
           if (newScale < BASE_SCALE * 0.5) newScale = BASE_SCALE * 0.5;
           if (newScale > BASE_SCALE * 4) newScale = BASE_SCALE * 4;
 
-          // Применяем масштаб (учитываем зеркало)
           var xSign = isMirror ? -1 : 1;
           archEl.setAttribute('scale', (xSign * newScale) + ' ' + newScale + ' 1');
 
-          // Двигаем арку вверх пропорционально масштабу
-          // Если арка привязана к метке, её Y нужно увеличивать с расстоянием
-          // чтобы она оставалась в верхней части кадра
           var yOffset = ARCH_BASE_Y * scaleFactor;
           archEl.setAttribute('position', '0 ' + yOffset + ' 0');
         }
