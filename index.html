@@ -3,90 +3,31 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>AR Photo Zone — Пионы</title>
+    <title>AR Арка из пионов</title>
 
+    <!-- Подключаем A-Frame и MindAR -->
     <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
-    <script>
-      (function() {
-        var params = new URLSearchParams(window.location.search);
-        var cam = params.get('camera') || 'back';
-        var facingMode = cam === 'front' ? 'user' : 'environment';
-        var original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-        navigator.mediaDevices.getUserMedia = function(constraints) {
-          if (constraints && constraints.video !== undefined && constraints.video !== false) {
-            if (typeof constraints.video === 'object' && constraints.video !== null) {
-              constraints.video.facingMode = facingMode;
-            } else {
-              constraints.video = { facingMode: facingMode };
-            }
-          }
-          return original(constraints);
-        };
-      })();
-    </script>
 
     <style>
       html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
       canvas { display: block; width: 100% !important; height: 100% !important; }
       a-scene { width: 100vw !important; height: 100vh !important; display: block; margin: 0 auto; }
 
+      /* Подсказка: «наведите на метку» */
       #hint {
         position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
         background: rgba(0,0,0,0.55); color: #fff;
-        padding: 7px 20px; border-radius: 18px;
-        font-family: -apple-system, sans-serif;
+        padding: 8px 16px; border-radius: 12px;
+        font-family: -apple-system, system-ui, sans-serif;
         font-size: 13px; font-weight: 400; line-height: 1;
-        white-space: nowrap;
-        z-index: 100; transition: opacity 0.5s;
+        white-space: nowrap; z-index: 100;
         pointer-events: none; text-align: center;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       }
-      #hint.hidden { opacity: 0; }
+      #hint.hidden { opacity: 0; transition: opacity 0.4s ease; }
 
-      #switch-cam {
-        position: fixed; bottom: 30px; right: 25px;
-        background: transparent; border: none;
-        width: 50px; height: 50px; border-radius: 50%;
-        z-index: 100; cursor: pointer;
-        box-shadow: 0 3px 12px rgba(0,0,0,0.45);
-        transition: all 0.2s;
-        display: flex; align-items: center; justify-content: center;
-      }
-      #switch-cam:active { transform: scale(0.92); }
-      #switch-cam svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
-
-      #mirror-cam {
-        position: fixed; bottom: 92px; right: 25px;
-        background: transparent; border: none;
-        width: 50px; height: 50px; border-radius: 50%;
-        z-index: 100; cursor: pointer;
-        box-shadow: 0 3px 12px rgba(0,0,0,0.45);
-        transition: all 0.2s; display: none;
-        align-items: center; justify-content: center;
-      }
-      #mirror-cam:active { transform: scale(0.92); }
-      #mirror-cam svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
-
-      #photo-btn {
-        position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
-        background: #fff; border: none;
-        width: 64px; height: 64px; border-radius: 50%;
-        z-index: 100; cursor: pointer;
-        box-shadow: 0 3px 14px rgba(0,0,0,0.4);
-        transition: all 0.15s;
-        display: flex; align-items: center; justify-content: center;
-      }
-      #photo-btn:active { transform: translateX(-50%) scale(0.92); }
-
-      #flash {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: #fff; opacity: 0; z-index: 200; pointer-events: none;
-        transition: opacity 0.25s;
-      }
-      #flash.flash-on { opacity: 0.9; }
-
+      /* Крестик-прицел для сканирования */
       #scan-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 90; pointer-events: none;
@@ -103,505 +44,55 @@
     </style>
   </head>
   <body>
+    <!-- Интерфейс -->
     <div id="hint">Наведите камеру на метку</div>
     <div id="scan-overlay"><div id="scan-plus"></div></div>
-    <div id="flash"></div>
 
-    <button id="photo-btn"></button>
-
-    <button id="switch-cam">
-      <svg viewBox="0 0 24 24">
-        <polyline points="23 4 23 10 17 10"></polyline>
-        <polyline points="1 20 1 14 7 14"></polyline>
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
-        <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
-      </svg>
-    </button>
-
-    <button id="mirror-cam">
-      <svg viewBox="0 0 24 24">
-        <path d="M12 3v18"></path>
-        <path d="M8 7L4 12l4 5"></path>
-        <path d="M16 7l4 5-4 5"></path>
-      </svg>
-    </button>
-
+    <!-- Сцена AR -->
     <a-scene
       mindar-image="imageTargetSrc: targets.mind; filterMinCF: 0.001; filterBeta: 0.01; warmupTolerance: 5; missTolerance: 10; uiScanning: no; uiLoading: no; uiError: no;"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
       color-space="sRGB"
-      renderer="colorManagement: true, physicallyCorrectLights: true, preserveDrawingBuffer: true">
+      renderer="colorManagement: true, preserveDrawingBuffer: true, antialias: false, powerPreference: 'low-power'">
 
-      <a-light type="ambient" intensity="0.7" color="#fff5f0"></a-light>
-      <a-light type="directional" position="0 1 2" intensity="0.6" color="#ffffff"></a-light>
-      <a-light type="point" position="0.5 0.5 1" intensity="0.25" color="#ffe8e8"></a-light>
+      <!-- Освещение (минимум, чтобы картинка не была чёрной) -->
+      <a-light type="ambient" intensity="0.8" color="#fff5f0"></a-light>
+      <a-light type="directional" position="0 1 2" intensity="0.5" color="#ffffff"></a-light>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity mindar-image-target="targetIndex: 0" id="target">
-        <a-entity id="container"></a-entity>
+      <!-- Метка + Арка (одна картинка) -->
+      <a-entity mindar-image-target="targetIndex: 0">
+        <a-image
+          src="arch_peonies.png"
+          position="0 0.15 0"
+          rotation="0 0 0"
+          scale="1.1 1.1 1"
+          material="transparent: true; alphaTest: 0.01; side: double">
+        </a-image>
       </a-entity>
     </a-scene>
 
+    <!-- Логика подсказок -->
     <script>
-      var params = new URLSearchParams(window.location.search);
-      var currentCam = params.get('camera') || 'back';
+      const hint = document.getElementById('hint');
+      const overlay = document.getElementById('scan-overlay');
+      const targetEl = document.querySelector('[mindar-image-target]');
 
-      var switchBtn = document.getElementById('switch-cam');
-      switchBtn.addEventListener('click', function() {
-        var newCam = currentCam === 'front' ? 'back' : 'front';
-        window.location.href = window.location.pathname + '?camera=' + newCam;
-      });
-
-      var mirrorBtn = document.getElementById('mirror-cam');
-      var isMirror = false;
-      if (currentCam === 'front') {
-        mirrorBtn.style.display = 'flex';
-      }
-
-      function applyMirror() {
-        var videoEl = document.querySelector('video');
-        if (videoEl) {
-          videoEl.style.transform = isMirror ? 'scaleX(-1)' : 'none';
-        }
-        var canvases = document.querySelectorAll('a-scene canvas, .a-canvas');
-        var container = document.getElementById('container');
-        if (canvases.length > 0) {
-          canvases[0].style.transform = isMirror ? 'scaleX(-1)' : 'none';
-          container.setAttribute('scale', isMirror ? '-1 1 1' : '1 1 1');
-        }
-      }
-
-      mirrorBtn.addEventListener('click', function() {
-        isMirror = !isMirror;
-        applyMirror();
-      });
-
-      // === Фото ===
-      var photoBtn = document.getElementById('photo-btn');
-      var flashEl = document.getElementById('flash');
-
-      photoBtn.addEventListener('click', function() {
-        flashEl.classList.add('flash-on');
-        setTimeout(function() { flashEl.classList.remove('flash-on'); }, 250);
-
-        requestAnimationFrame(function() {
-          requestAnimationFrame(function() {
-            var canvas3d = document.querySelector('a-scene canvas') || document.querySelector('.a-canvas');
-            var videoEl = document.querySelector('video');
-            if (!canvas3d) return;
-
-            var w = canvas3d.width;
-            var h = canvas3d.height;
-
-            var outCanvas = document.createElement('canvas');
-            outCanvas.width = w;
-            outCanvas.height = h;
-            var ctx = outCanvas.getContext('2d');
-
-            function drawMirror(fn) {
-              if (isMirror) {
-                ctx.save();
-                ctx.translate(w, 0);
-                ctx.scale(-1, 1);
-                fn();
-                ctx.restore();
-              } else {
-                fn();
-              }
-            }
-
-            if (videoEl && videoEl.videoWidth > 0) {
-              var vw = videoEl.videoWidth;
-              var vh = videoEl.videoHeight;
-              var scale = Math.max(w / vw, h / vh);
-              var dw = vw * scale;
-              var dh = vh * scale;
-              var dx = (w - dw) / 2;
-              var dy = (h - dh) / 2;
-              drawMirror(function() {
-                ctx.drawImage(videoEl, dx, dy, dw, dh);
-              });
-            }
-
-            drawMirror(function() {
-              ctx.drawImage(canvas3d, 0, 0, w, h);
-            });
-
-            try {
-              var dataURL = outCanvas.toDataURL('image/png');
-              var link = document.createElement('a');
-              link.download = 'ar-photo-' + Date.now() + '.png';
-              link.href = dataURL;
-              link.click();
-            } catch(e) {
-              console.error('Photo capture error:', e);
-            }
-          });
+      if (targetEl) {
+        targetEl.addEventListener('targetFound', () => {
+          hint.classList.add('hidden');
+          overlay.classList.add('hidden');
         });
-      });
 
-      // =====================================================
-      // ТЕКСТУРА СВЕРКАНИЯ
-      // =====================================================
-
-      var sparkleTexture = (function() {
-        var c = document.createElement('canvas');
-        c.width = 128; c.height = 128;
-        var ctx = c.getContext('2d');
-
-        var g1 = ctx.createRadialGradient(64, 64, 0, 64, 64, 55);
-        g1.addColorStop(0, 'rgba(255,255,255,0.95)');
-        g1.addColorStop(0.15, 'rgba(255,250,230,0.6)');
-        g1.addColorStop(0.5, 'rgba(255,240,200,0.08)');
-        g1.addColorStop(1, 'rgba(255,240,200,0)');
-        ctx.fillStyle = g1;
-        ctx.fillRect(0, 0, 128, 128);
-
-        ctx.save();
-        ctx.translate(64, 64);
-        ctx.fillStyle = 'rgba(255,255,255,0.92)';
-        ctx.beginPath();
-        ctx.moveTo(0, -58);
-        ctx.quadraticCurveTo(4, -8, 58, 0);
-        ctx.quadraticCurveTo(4, 8, 0, 58);
-        ctx.quadraticCurveTo(-4, 8, -58, 0);
-        ctx.quadraticCurveTo(-4, -8, 0, -58);
-        ctx.fill();
-        ctx.restore();
-
-        var g2 = ctx.createRadialGradient(64, 64, 0, 64, 64, 18);
-        g2.addColorStop(0, 'rgba(255,255,255,1)');
-        g2.addColorStop(0.5, 'rgba(255,255,240,0.5)');
-        g2.addColorStop(1, 'rgba(255,255,240,0)');
-        ctx.fillStyle = g2;
-        ctx.beginPath();
-        ctx.arc(64, 64, 18, 0, Math.PI * 2);
-        ctx.fill();
-
-        return c.toDataURL('image/png');
-      })();
-
-      // =====================================================
-      // ПРЯМОУГОЛЬНАЯ АРКА — по центру, аккуратная
-      // =====================================================
-
-      function shuffle(arr) {
-        for (var i = arr.length - 1; i > 0; i--) {
-          var j = Math.floor(Math.random() * (i + 1));
-          var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
-        }
-        return arr;
-      }
-
-      // Размеры арки — симметричные, по центру
-      var archLeftX = -1.05;
-      var archRightX = 1.05;
-      var archBottomY = -0.05;
-      var archTopY = 1.15;
-
-      // Лёгкая асимметрия — правая сторона чуть ниже
-      var archTopYRight = 1.08;
-
-      var positions = [];
-
-      // --- Левая вертикаль (снизу вверх, без верхнего угла) ---
-      var leftCount = 8;
-      for (var i = 0; i < leftCount; i++) {
-        var t = i / leftCount;
-        var y = archBottomY + (archTopY - archBottomY) * t;
-        positions.push({
-          x: archLeftX + (Math.random() - 0.5) * 0.1,
-          y: y + (Math.random() - 0.5) * 0.08
-        });
-      }
-
-      // --- Верхняя горизонталь (слева направо, включая оба угла) ---
-      var topCount = 14;
-      for (var i = 0; i < topCount; i++) {
-        var t = i / (topCount - 1);
-        var x = archLeftX + (archRightX - archLeftX) * t;
-        // Лёгкий наклон: слева archTopY, справа archTopYRight
-        var y = archTopY + (archTopYRight - archTopY) * t;
-        positions.push({
-          x: x + (Math.random() - 0.5) * 0.06,
-          y: y + (Math.random() - 0.5) * 0.1
-        });
-      }
-
-      // --- Правая вертикаль (сверху вниз, без верхнего угла) ---
-      var rightCount = 8;
-      for (var i = 1; i <= rightCount; i++) {
-        var t = i / rightCount;
-        var y = archTopYRight - (archTopYRight - archBottomY) * t;
-        positions.push({
-          x: archRightX + (Math.random() - 0.5) * 0.1,
-          y: y + (Math.random() - 0.5) * 0.08
-        });
-      }
-
-      // --- Низ: бутоны вниз по обеим сторонам ---
-      var bottomExtras = [
-        { x: archLeftX - 0.02, y: archBottomY - 0.12 },
-        { x: archLeftX + 0.08, y: archBottomY - 0.22 },
-        { x: archLeftX - 0.06, y: archBottomY - 0.3 },
-        { x: archRightX + 0.02, y: archBottomY - 0.12 },
-        { x: archRightX - 0.08, y: archBottomY - 0.22 },
-        { x: archRightX + 0.06, y: archBottomY - 0.3 }
-      ];
-      bottomExtras.forEach(function(p) {
-        positions.push({ x: p.x, y: p.y });
-      });
-
-      // Перемешиваем все позиции
-      shuffle(positions);
-
-      // =====================================================
-      // КОНФИГУРАЦИЯ ПИОНОВ — естественное соотношение
-      // На 1 полностью открытый: 1-2 бутона
-      // На 1 полураскрытый: 2-3 бутона
-      // =====================================================
-
-      // 9 полностью открытых → ~14 бутонов
-      // 7 полураскрытых → ~18 бутонов
-      // Итого ~32 бутона... сократим до разумного
-      // Возьмём: 9 открытых, 7 полураскрытых, 5 раскрывающихся, 16 бутонов
-
-      var peonySpecs = [];
-      var idx = 0;
-
-      // 9 полностью открытых (крупные)
-      for (var i = 0; i < 9; i++) {
-        peonySpecs.push({
-          src: 'peony.png',
-          scale: 0.5 + Math.random() * 0.35,  // 0.5–0.85
-          rot: (Math.random() - 0.5) * 20,
-          z: 0.01 + Math.random() * 0.03
-        });
-      }
-
-      // 7 полураскрытых (средние)
-      for (var i = 0; i < 7; i++) {
-        peonySpecs.push({
-          src: 'peony_half.png',
-          scale: 0.32 + Math.random() * 0.13,  // 0.32–0.45
-          rot: (Math.random() - 0.5) * 24,
-          z: 0.0 + Math.random() * 0.02
-        });
-      }
-
-      // 5 раскрывающихся (чуть крупнее полураскрытых)
-      for (var i = 0; i < 5; i++) {
-        peonySpecs.push({
-          src: 'peony_open.png',
-          scale: 0.35 + Math.random() * 0.12,  // 0.35–0.47
-          rot: (Math.random() - 0.5) * 22,
-          z: 0.0 + Math.random() * 0.025
-        });
-      }
-
-      // 16 бутонов (мелкие) — 1-2 на открытый, 2-3 на полураскрытый
-      for (var i = 0; i < 16; i++) {
-        peonySpecs.push({
-          src: 'peony_bud.png',
-          scale: 0.14 + Math.random() * 0.08,  // 0.14–0.22
-          rot: (Math.random() - 0.5) * 30,
-          z: 0.02 + Math.random() * 0.03
-        });
-      }
-
-      // Перемешиваем типы — нет последовательности
-      shuffle(peonySpecs);
-
-      // =====================================================
-      // СОЗДАНИЕ ПИОНОВ
-      // =====================================================
-
-      var container = document.getElementById('container');
-      var target = document.getElementById('target');
-      var hint = document.getElementById('hint');
-      var scanOverlay = document.getElementById('scan-overlay');
-      var allPeonies = [];
-      var allPeonyPositions = [];
-      var origPos = {};
-
-      function createPeony(id, src, x, y, rot, baseScale, zOffset, growDur, fadeDur) {
-        var el = document.createElement('a-image');
-        el.setAttribute('id', id);
-        el.setAttribute('src', src);
-        // alphaTest 0.01 — минимальный, не режет края
-        el.setAttribute('material', 'transparent: true; alphaTest: 0.01; side: double');
-        var posStr = x + ' ' + y + ' ' + zOffset;
-        el.setAttribute('position', posStr);
-        el.setAttribute('rotation', '0 ' + rot + ' 0');
-        el.setAttribute('scale', '0.001 0.001 1');
-        el.setAttribute('opacity', '0');
-        el.setAttribute('animation__grow',
-          'property: scale; from: 0.001 0.001 1; to: ' + baseScale + ' ' + baseScale + ' 1; dur: ' + growDur + '; easing: easeOutCubic; startEvents: bloom');
-        el.setAttribute('animation__fade',
-          'property: opacity; from: 0; to: 1; dur: ' + fadeDur + '; easing: easeOutCubic; startEvents: bloom');
-        container.appendChild(el);
-        allPeonies.push(el);
-        origPos[id] = posStr;
-        return el;
-      }
-
-      // Назначаем позиции пионам — если позиций больше, чем пионов, берём первые N
-      // если пионов больше, чем позиций — циклически
-      for (var i = 0; i < peonySpecs.length; i++) {
-        var spec = peonySpecs[i];
-        var pos = positions[i % positions.length];
-        var growDur = 500 + Math.floor(Math.random() * 300);
-        var fadeDur = 200 + Math.floor(Math.random() * 150);
-        var id = 'peony_' + i;
-        createPeony(id, spec.src, pos.x, pos.y, spec.rot, spec.scale, spec.z, growDur, fadeDur);
-        allPeonyPositions.push({ x: pos.x, y: pos.y, z: spec.z });
-      }
-
-      // =====================================================
-      // СВЕРКАНИЕ
-      // =====================================================
-
-      var sparkleElements = [];
-      var sparkleActive = false;
-
-      // 26 мелких сверкающих точек
-      for (var i = 0; i < 26; i++) {
-        var pIdx = Math.floor(Math.random() * allPeonyPositions.length);
-        var pp = allPeonyPositions[pIdx];
-        var sx = pp.x + (Math.random() - 0.5) * 0.12;
-        var sy = pp.y + (Math.random() - 0.5) * 0.12;
-        var sz = (pp.z || 0) + 0.03;
-
-        var el = document.createElement('a-image');
-        el.setAttribute('id', 'spark_' + i);
-        el.setAttribute('src', sparkleTexture);
-        el.setAttribute('material', 'transparent: true; alphaTest: 0; opacity: 0; side: double');
-        el.setAttribute('position', sx + ' ' + sy + ' ' + sz);
-
-        var size = 0.04 + Math.random() * 0.05;
-        el.setAttribute('scale', size + ' ' + size + ' 1');
-        container.appendChild(el);
-
-        sparkleElements.push({
-          el: el,
-          size: size,
-          phaseOffset: Math.random() * Math.PI * 2,
-          speed: 0.8 + Math.random() * 1.8,
-          maxOpacity: 0.5 + Math.random() * 0.4,
-          currentOpacity: 0
-        });
-      }
-
-      // 6 крупных сверкающих точек
-      for (var i = 0; i < 6; i++) {
-        var pIdx = Math.floor(Math.random() * allPeonyPositions.length);
-        var pp = allPeonyPositions[pIdx];
-        var sx = pp.x + (Math.random() - 0.5) * 0.1;
-        var sy = pp.y + (Math.random() - 0.5) * 0.1;
-        var sz = (pp.z || 0) + 0.04;
-
-        var el = document.createElement('a-image');
-        el.setAttribute('id', 'spark_big_' + i);
-        el.setAttribute('src', sparkleTexture);
-        el.setAttribute('material', 'transparent: true; alphaTest: 0; opacity: 0; side: double');
-        el.setAttribute('position', sx + ' ' + sy + ' ' + sz);
-
-        var size = 0.08 + Math.random() * 0.04;
-        el.setAttribute('scale', size + ' ' + size + ' 1');
-        container.appendChild(el);
-
-        sparkleElements.push({
-          el: el,
-          size: size,
-          phaseOffset: Math.random() * Math.PI * 2,
-          speed: 0.5 + Math.random() * 1.0,
-          maxOpacity: 0.4 + Math.random() * 0.35,
-          currentOpacity: 0
-        });
-      }
-
-      function sparkleTick(time) {
-        var t = time * 0.001;
-
-        if (sparkleActive) {
-          for (var i = 0; i < sparkleElements.length; i++) {
-            var s = sparkleElements[i];
-            var v = Math.sin(t * s.speed + s.phaseOffset);
-
-            if (v > 0.1) {
-              s.currentOpacity = v * s.maxOpacity;
-              var sc = s.size * (0.4 + 0.6 * v);
-              s.el.setAttribute('opacity', s.currentOpacity.toFixed(3));
-              s.el.setAttribute('scale', sc.toFixed(4) + ' ' + sc.toFixed(4) + ' 1');
-            } else {
-              if (s.currentOpacity > 0.01) {
-                s.currentOpacity = 0;
-                s.el.setAttribute('opacity', '0');
-              }
-            }
-          }
-        }
-
-        requestAnimationFrame(sparkleTick);
-      }
-      requestAnimationFrame(sparkleTick);
-
-      // =====================================================
-      // СБРОС И ПОЯВЛЕНИЕ
-      // =====================================================
-
-      function resetAll() {
-        allPeonies.forEach(function(el) {
-          el.setAttribute('scale', '0.001 0.001 1');
-          el.setAttribute('opacity', '0');
-          el.setAttribute('position', origPos[el.getAttribute('id')]);
-        });
-        sparkleElements.forEach(function(s) {
-          s.el.setAttribute('opacity', '0');
-        });
-        sparkleActive = false;
-      }
-
-      function bloomAll() {
-        var shuffled = shuffle(allPeonies.slice());
-        var totalMs = 1000;
-        var step = totalMs / shuffled.length;
-        shuffled.forEach(function(el, i) {
-          var delay = Math.floor(i * step + Math.random() * (step * 0.5));
-          setTimeout(function() { el.emit('bloom'); }, delay);
-        });
-        setTimeout(function() { sparkleActive = true; }, 1100);
-      }
-
-      var hideTimer = null;
-      var showTimer = null;
-
-      target.addEventListener('targetFound', function() {
-        if (showTimer) { clearTimeout(showTimer); showTimer = null; }
-        if (!hideTimer) {
-          hideTimer = setTimeout(function() {
-            hint.classList.add('hidden');
-            scanOverlay.classList.add('hidden');
-            hideTimer = null;
-          }, 250);
-        }
-        resetAll();
-        setTimeout(bloomAll, 100);
-      });
-
-      target.addEventListener('targetLost', function() {
-        if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
-        if (!showTimer) {
-          showTimer = setTimeout(function() {
-            resetAll();
+        targetEl.addEventListener('targetLost', () => {
+          setTimeout(() => {
             hint.classList.remove('hidden');
-            scanOverlay.classList.remove('hidden');
-            showTimer = null;
+            overlay.classList.remove('hidden');
           }, 800);
-        }
-      });
+        });
+      }
     </script>
   </body>
 </html>
