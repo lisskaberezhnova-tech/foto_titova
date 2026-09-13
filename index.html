@@ -5,29 +5,88 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>AR Арка из пионов</title>
 
-    <!-- Подключаем A-Frame и MindAR -->
     <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <script>
+      (function() {
+        var params = new URLSearchParams(window.location.search);
+        var cam = params.get('camera') || 'back';
+        var facingMode = cam === 'front' ? 'user' : 'environment';
+        var original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = function(constraints) {
+          if (constraints && constraints.video !== undefined && constraints.video !== false) {
+            if (typeof constraints.video === 'object' && constraints.video !== null) {
+              constraints.video.facingMode = facingMode;
+            } else {
+              constraints.video = { facingMode: facingMode };
+            }
+          }
+          return original(constraints);
+        };
+      })();
+    </script>
 
     <style>
       html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
       canvas { display: block; width: 100% !important; height: 100% !important; }
       a-scene { width: 100vw !important; height: 100vh !important; display: block; margin: 0 auto; }
 
-      /* Подсказка: «наведите на метку» */
       #hint {
         position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
         background: rgba(0,0,0,0.55); color: #fff;
-        padding: 8px 16px; border-radius: 12px;
-        font-family: -apple-system, system-ui, sans-serif;
+        padding: 7px 20px; border-radius: 18px;
+        font-family: -apple-system, sans-serif;
         font-size: 13px; font-weight: 400; line-height: 1;
         white-space: nowrap; z-index: 100;
         pointer-events: none; text-align: center;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        transition: opacity 0.4s;
       }
-      #hint.hidden { opacity: 0; transition: opacity 0.4s ease; }
+      #hint.hidden { opacity: 0; }
 
-      /* Крестик-прицел для сканирования */
+      #switch-cam {
+        position: fixed; bottom: 30px; right: 25px;
+        background: transparent; border: none;
+        width: 50px; height: 50px; border-radius: 50%;
+        z-index: 100; cursor: pointer;
+        box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+        transition: all 0.2s;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #switch-cam:active { transform: scale(0.92); }
+      #switch-cam svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
+
+      #mirror-cam {
+        position: fixed; bottom: 92px; right: 25px;
+        background: transparent; border: none;
+        width: 50px; height: 50px; border-radius: 50%;
+        z-index: 100; cursor: pointer;
+        box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+        transition: all 0.2s; display: none;
+        align-items: center; justify-content: center;
+      }
+      #mirror-cam:active { transform: scale(0.92); }
+      #mirror-cam svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
+
+      #photo-btn {
+        position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+        background: #fff; border: none;
+        width: 64px; height: 64px; border-radius: 50%;
+        z-index: 100; cursor: pointer;
+        box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+        transition: all 0.15s;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #photo-btn:active { transform: translateX(-50%) scale(0.92); }
+
+      #flash {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #fff; opacity: 0; z-index: 200; pointer-events: none;
+        transition: opacity 0.25s;
+      }
+      #flash.flash-on { opacity: 0.9; }
+
       #scan-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 90; pointer-events: none;
@@ -44,11 +103,29 @@
     </style>
   </head>
   <body>
-    <!-- Интерфейс -->
     <div id="hint">Наведите камеру на метку</div>
     <div id="scan-overlay"><div id="scan-plus"></div></div>
+    <div id="flash"></div>
 
-    <!-- Сцена AR -->
+    <button id="photo-btn"></button>
+
+    <button id="switch-cam">
+      <svg viewBox="0 0 24 24">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <polyline points="1 20 1 14 7 14"></polyline>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+        <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+      </svg>
+    </button>
+
+    <button id="mirror-cam">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 3v18"></path>
+        <path d="M8 7L4 12l4 5"></path>
+        <path d="M16 7l4 5-4 5"></path>
+      </svg>
+    </button>
+
     <a-scene
       mindar-image="imageTargetSrc: targets.mind; filterMinCF: 0.001; filterBeta: 0.01; warmupTolerance: 5; missTolerance: 10; uiScanning: no; uiLoading: no; uiError: no;"
       vr-mode-ui="enabled: false"
@@ -56,43 +133,211 @@
       color-space="sRGB"
       renderer="colorManagement: true, preserveDrawingBuffer: true, antialias: false, powerPreference: 'low-power'">
 
-      <!-- Освещение (минимум, чтобы картинка не была чёрной) -->
       <a-light type="ambient" intensity="0.8" color="#fff5f0"></a-light>
       <a-light type="directional" position="0 1 2" intensity="0.5" color="#ffffff"></a-light>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Метка + Арка (одна картинка) -->
-      <a-entity mindar-image-target="targetIndex: 0">
+      <a-entity mindar-image-target="targetIndex: 0" id="target">
         <a-image
+          id="arch"
           src="arch_peonies.png"
-          position="0 0.15 0"
+          position="0 0.6 0"
           rotation="0 0 0"
-          scale="1.1 1.1 1"
+          scale="2 2 1"
           material="transparent: true; alphaTest: 0.01; side: double">
         </a-image>
       </a-entity>
     </a-scene>
 
-    <!-- Логика подсказок -->
     <script>
-      const hint = document.getElementById('hint');
-      const overlay = document.getElementById('scan-overlay');
-      const targetEl = document.querySelector('[mindar-image-target]');
+      var params = new URLSearchParams(window.location.search);
+      var currentCam = params.get('camera') || 'back';
 
-      if (targetEl) {
-        targetEl.addEventListener('targetFound', () => {
-          hint.classList.add('hidden');
-          overlay.classList.add('hidden');
-        });
+      // === Кнопка разворота камеры ===
+      var switchBtn = document.getElementById('switch-cam');
+      switchBtn.addEventListener('click', function() {
+        var newCam = currentCam === 'front' ? 'back' : 'front';
+        window.location.href = window.location.pathname + '?camera=' + newCam;
+      });
 
-        targetEl.addEventListener('targetLost', () => {
-          setTimeout(() => {
-            hint.classList.remove('hidden');
-            overlay.classList.remove('hidden');
-          }, 800);
-        });
+      // === Кнопка отражения ===
+      var mirrorBtn = document.getElementById('mirror-cam');
+      var isMirror = false;
+      if (currentCam === 'front') {
+        mirrorBtn.style.display = 'flex';
       }
+
+      function applyMirror() {
+        var videoEl = document.querySelector('video');
+        if (videoEl) {
+          videoEl.style.transform = isMirror ? 'scaleX(-1)' : 'none';
+        }
+        var canvases = document.querySelectorAll('a-scene canvas, .a-canvas');
+        var container = document.getElementById('target');
+        if (canvases.length > 0) {
+          canvases[0].style.transform = isMirror ? 'scaleX(-1)' : 'none';
+          if (container) {
+            var arch = document.getElementById('arch');
+            if (arch) {
+              arch.setAttribute('scale', isMirror ? '-2 2 1' : '2 2 1');
+            }
+          }
+        }
+      }
+
+      mirrorBtn.addEventListener('click', function() {
+        isMirror = !isMirror;
+        applyMirror();
+      });
+
+      // === Фото ===
+      var photoBtn = document.getElementById('photo-btn');
+      var flashEl = document.getElementById('flash');
+
+      photoBtn.addEventListener('click', function() {
+        flashEl.classList.add('flash-on');
+        setTimeout(function() { flashEl.classList.remove('flash-on'); }, 250);
+
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            var canvas3d = document.querySelector('a-scene canvas') || document.querySelector('.a-canvas');
+            var videoEl = document.querySelector('video');
+            if (!canvas3d) return;
+
+            var w = canvas3d.width;
+            var h = canvas3d.height;
+
+            var outCanvas = document.createElement('canvas');
+            outCanvas.width = w;
+            outCanvas.height = h;
+            var ctx = outCanvas.getContext('2d');
+
+            function drawMirror(fn) {
+              if (isMirror) {
+                ctx.save();
+                ctx.translate(w, 0);
+                ctx.scale(-1, 1);
+                fn();
+                ctx.restore();
+              } else {
+                fn();
+              }
+            }
+
+            if (videoEl && videoEl.videoWidth > 0) {
+              var vw = videoEl.videoWidth;
+              var vh = videoEl.videoHeight;
+              var scale = Math.max(w / vw, h / vh);
+              var dw = vw * scale;
+              var dh = vh * scale;
+              var dx = (w - dw) / 2;
+              var dy = (h - dh) / 2;
+              drawMirror(function() {
+                ctx.drawImage(videoEl, dx, dy, dw, dh);
+              });
+            }
+
+            drawMirror(function() {
+              ctx.drawImage(canvas3d, 0, 0, w, h);
+            });
+
+            try {
+              var dataURL = outCanvas.toDataURL('image/png');
+              var link = document.createElement('a');
+              link.download = 'ar-photo-' + Date.now() + '.png';
+              link.href = dataURL;
+              link.click();
+            } catch(e) {
+              console.error('Photo capture error:', e);
+            }
+          });
+        });
+      });
+
+      // =====================================================
+      // ФИКСИРОВАННЫЙ РАЗМЕР АРКИ — не уменьшается при отводе камеры
+      // =====================================================
+
+      var archEl = document.getElementById('arch');
+      var targetEl = document.getElementById('target');
+      var cameraEl = document.querySelector('a-camera');
+      var hintEl = document.getElementById('hint');
+      var scanOverlayEl = document.getElementById('scan-overlay');
+
+      // Базовое расстояние и масштаб (калибровка)
+      var BASE_DISTANCE = 1.0;   // расстояние, на котором scale = BASE_SCALE
+      var BASE_SCALE = 2.0;       // базовый масштаб арки
+
+      // Базовая позиция арки над меткой
+      var ARCH_BASE_Y = 0.6;
+
+      var targetFound = false;
+
+      function tick() {
+        if (targetFound && archEl && cameraEl && cameraEl.object3D) {
+          // Позиции в мировых координатах
+          var camPos = cameraEl.object3D.position;
+          var archPos = archEl.object3D.position;
+          var archWorld = new THREE.Vector3();
+          archEl.object3D.getWorldPosition(archWorld);
+
+          // Расстояние от камеры до арки
+          var dx = camPos.x - archWorld.x;
+          var dy = camPos.y - archWorld.y;
+          var dz = camPos.z - archWorld.z;
+          var distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+          // Масштабируем пропорционально расстоянию
+          // Чем дальше — тем больше scale, видимый размер остаётся постоянным
+          var scaleFactor = distance / BASE_DISTANCE;
+          var newScale = BASE_SCALE * scaleFactor;
+
+          // Ограничиваем, чтобы не было слишком резко
+          if (newScale < BASE_SCALE * 0.5) newScale = BASE_SCALE * 0.5;
+          if (newScale > BASE_SCALE * 4) newScale = BASE_SCALE * 4;
+
+          // Применяем масштаб (учитываем зеркало)
+          var xSign = isMirror ? -1 : 1;
+          archEl.setAttribute('scale', (xSign * newScale) + ' ' + newScale + ' 1');
+
+          // Двигаем арку вверх пропорционально масштабу
+          // Если арка привязана к метке, её Y нужно увеличивать с расстоянием
+          // чтобы она оставалась в верхней части кадра
+          var yOffset = ARCH_BASE_Y * scaleFactor;
+          archEl.setAttribute('position', '0 ' + yOffset + ' 0');
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+
+      // === Подсказки ===
+      var hideTimer = null;
+      var showTimer = null;
+
+      targetEl.addEventListener('targetFound', function() {
+        targetFound = true;
+        if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+        if (!hideTimer) {
+          hideTimer = setTimeout(function() {
+            hintEl.classList.add('hidden');
+            scanOverlayEl.classList.add('hidden');
+            hideTimer = null;
+          }, 250);
+        }
+      });
+
+      targetEl.addEventListener('targetLost', function() {
+        targetFound = false;
+        if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+        if (!showTimer) {
+          showTimer = setTimeout(function() {
+            hintEl.classList.remove('hidden');
+            scanOverlayEl.classList.remove('hidden');
+            showTimer = null;
+          }, 800);
+        }
+      });
     </script>
   </body>
 </html>
